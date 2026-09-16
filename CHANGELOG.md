@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Restructured documentation to match the series' `README.md` +
+  `TUTORIAL.md` + `docs/PICS.md` shape (matching
+  `BACnetProfileExample-B-SS-CPP`): `README.md` is cut down to this example
+  only (series framing, the generic profile explainer, "Before you ship", and
+  the generated objects-and-properties block moved or removed); the
+  extending/reviewing/Troubleshooting material moves to the new
+  `TUTORIAL.md`; a new `docs/PICS.md` (ANSI/ASHRAE 135 Annex A shape) holds
+  the conformance statement, including a Device object entry in
+  `docs/objects.json` that was previously missing from the generated tables.
+  The Life Safety Point/Zone `unknown-object` gap
+  ([cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036))
+  is carried forward precisely into all three documents and into
+  `docs/PICS.md` section 6 as a configured-but-non-functional row.
+- **Build switched from a prebuilt STATIC library to the adapter's default
+  SOURCE mode**: `cmake -B build -S .` / `cmake --build build --config
+  Release` is now the full, single-command-pair build on every platform, with
+  no `tools/build-stack-static.sh` step. `CMakeLists.txt`'s header comment,
+  `AGENTS.md`, and `.github/workflows/release.yml` (dropped the static-library
+  cache/build steps and the matrix `lib:` entries; link-mode assertion now
+  checks `SOURCE`; `metrics-*.json` records `"link_mode": "SOURCE"`; packaged
+  release artifacts now include `TUTORIAL.md` and `docs/PICS.md`) were updated
+  to match. The published v1.0.0 footprint numbers were measured under the old
+  STATIC build; the README's Footprint table now notes that the next release
+  refreshes them under the SOURCE build.
+- Absorbed the README's former "Before you ship" table into per-field
+  comments next to the `CHANGE ALL OF THIS BEFORE YOU SHIP` block in
+  `main.cpp`, including the `DEVICE_NAME` uniqueness warning.
+
 ## [1.0.0] - 2026-09-15
 
 ### Added
