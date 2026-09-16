@@ -117,7 +117,7 @@ internal, non-exported `BACnetDBDevice::AddLifeSafetyPointObject`/
 `SetGeneratedPropertyValue` special-case these two object types and answer
 `unknown-object` for almost every property - **before this file's own
 `GetProperty*`/`SetProperty*` callbacks are ever reached**. Confirmed with a
-live `bacpypes3` client against this repository's own build:
+live BACnet client against this repository's own build:
 
 ```
 ReadProperty life-safety-point,1 . objectIdentifier  -> OK (life-safety-point,1)
