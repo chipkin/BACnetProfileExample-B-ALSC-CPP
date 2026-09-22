@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-22
+
+### Fixed
+
+- **`Application_Software_Version` (12) and `Firmware_Revision` (44) were
+  hardcoded and stale** - `main.cpp` set both from separate `static const
+  char* FIRMWARE_REVISION = "1.0.0"` / `APPLICATION_SOFTWARE_VERSION =
+  "1.0.0"` constants that nobody updated as the example's real version
+  advanced past `1.0.0`, and `Firmware_Revision` was never meant to be this
+  example's own version at all - it names the underlying platform. Fixed to
+  match the pattern already proven in `BACnetProfileExample-B-SCHUB-CPP`
+  (v1.1.13): `Application_Software_Version` now reads `APP_VERSION` directly
+  (one source of truth, can't drift from `--version`'s own banner again).
+  `Firmware_Revision` is now built at runtime from the CAS BACnet Stack's own
+  `BACnetStack_GetAPIMajorVersion()`/`GetAPIMinorVersion()`/
+  `GetAPIPatchVersion()`/`GetAPIBuildVersion()` (the same 4 calls
+  `common/CASExampleHelper.cpp`'s `PrintVersion()` already uses for the
+  startup banner), populated once into `g_firmwareRevision` right after
+  `LoadBACnetFunctions()` succeeds. Verified with a real ReadProperty
+  (bacpypes3) against the running device: `Application_Software_Version =
+  "1.0.1"`, `Firmware_Revision = "6.0.21.0"` - both now match the actual
+  running build instead of a stale hardcoded `"1.0.0"` string.
+
 ### Changed
 
 - Restructured documentation to match the series' `README.md` +
