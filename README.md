@@ -181,7 +181,7 @@ source.
 ## The device this example creates
 
 ```
-Device 389008  "Rainbow"   (Vendor 389 - Chipkin Automation Systems)
+Device 389008  "Chipkin Example B-ALSC"   (Vendor 389 - Chipkin Automation Systems)
     ├── Analog Input  1       "Bronze"      read-only sensor (REAL, deg C); COV-subscribable
     ├── Binary Input  1       "Emerald"     read-only sensor (active/inactive)
     ├── Multi-State Input 1   "Hot Pink"    read-only sensor (state 1..3)
@@ -199,7 +199,7 @@ Device 389008  "Rainbow"   (Vendor 389 - Chipkin Automation Systems)
 
 Amber, Azure and Crimson are B-LSC's life-safety additions; Beige, Saffron and
 Cream are this repository's B-ALSC additions. Object names follow the series'
-colour convention (Device is always "Rainbow").
+colour convention (Device is always "Chipkin Example B-ALSC").
 
 ## What this example does NOT do yet
 
@@ -312,7 +312,7 @@ CAS BACnet Stack version: 6.0.21.0
 Common helper (common/) version: 2.5.0
 FYI: Listening for BACnet/IP on UDP port 47808 (Network Port 1).
 TX 21 bytes to 192.168.3.255:47808 (broadcast) (Network Port 1)
-FYI: Device 389008 ("Rainbow") ready. Vendor ID 389. Press 'h' for help.
+FYI: Device 389008 ("Chipkin Example B-ALSC") ready. Vendor ID 389. Press 'h' for help.
 ```
 
 The `TX` line is the start-up I-Am the device broadcasts to announce itself. It
