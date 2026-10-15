@@ -14,11 +14,11 @@ profile - seeded from B-LSC (Life Safety Controller), and adds **F-EVENTLOG**
 Calendar 1 "Cream", copied from B-AAC's canonical pattern) on top of B-LSC's
 **intrinsic life-safety alarming** (AE-LS-B / AE-ACK-B / AE-INFO-B),
 **LifeSafetyOperation** (silence/reset), and **DS-COV-B**. What B-ALSC requires
-but the stack's customer surface cannot yet do - Life Safety Point/Zone's
-almost-total unservability (issue #2036, inherited from B-LSC), Zone's
-`Zone_Members`, and Event Log's alarm-capture demo (downstream of the same
-issue) - is documented in [TODO.md](TODO.md) - keep that file honest and
-current. The top priority is that the code reads like a tutorial a customer
+but this example cannot yet do - LifeSafetyOperation (not compiled into the
+default stack build), Zone's `Zone_Members` (issue #2036, open) - is
+documented in [TODO.md](TODO.md) - keep that file honest and current. At stack
+`64b2cfac5` Life Safety Point/Zone serve every listed property and their alarms
+work (the `unknown-object` defect of earlier pins is fixed by stack #2187). The top priority is that the code reads like a tutorial a customer
 can learn from and copy-paste. Favour clarity over cleverness.
 
 ## Layout
@@ -29,7 +29,7 @@ This repository is self-contained:
 - `common/` - the shared helper (vendored).
 - `README.md` - what this example is. Keep it short and about THIS example only.
 - `TUTORIAL.md` - how to extend and review the example, including the Life
-  Safety Point/Zone gap (issue #2036) in detail. Long-form material that would
+  Safety Point/Zone history (issue #2036) in detail. Long-form material that would
   bloat the README belongs here.
 - `docs/PICS.md` - the Protocol Implementation Conformance Statement. Its
   objects-and-properties section is GENERATED from `docs/objects.json`; do not
@@ -80,7 +80,7 @@ Weekly_Schedule transition for right now.
 
 - Device is named "Chipkin Example B-ALSC"; objects use the series' colour names; vendor id 389.
 - Implement the B-ALSC services the stack supports; expose **every required
-  property** of each object for Protocol_Revision 24. Anything B-ALSC requires that
+  property** of each object for Protocol_Revision 30. Anything B-ALSC requires that
   is NOT implemented must be listed in [TODO.md](TODO.md) and the README.
 - **Life Safety Point/Zone objects use the SAME generic pattern as every other
   object in this series** - `BACnetStack_AddObject` + this file's own Get/Set
@@ -135,7 +135,8 @@ There are no unit tests; verification is behavioural:
 2. With a BACnet client (e.g. the CAS BACnet Explorer, or `bacpypes3`/`BAC0`),
    send **Who-Is** and confirm **I-Am** from the device instance.
 3. **ReadProperty** every required property of every object and confirm the
-   values; confirm `Protocol_Revision` is 24 and `Object_List` lists all objects.
+   values; confirm `Protocol_Revision` is 30 and `Object_List` lists all objects.
+   `python3 tests/run_wire_tests.py --exe build/BACnetExampleBALSC` automates this.
 4. **WriteProperty** a commandable output's `Present_Value` at a priority, re-read
    it (and its `Priority_Array`), then write NULL to relinquish and confirm it
    falls back to `Relinquish_Default`. Confirm a write to a read-only input is
@@ -156,8 +157,8 @@ There are no unit tests; verification is behavioural:
    `Record_Count`/`Total_Record_Count`; WriteProperty `Enable` and read it back;
    `ReadRange` (RangeByPosition) of `Log_Buffer`. Toggling `Enable` itself
    produces a captured log-status record (`Record_Count` advances) with no
-   application code involved - a good way to prove the capture hook is live
-   without needing step 5's blocked alarm.
+   application code involved. With `Enable` TRUE, step 5's alarm transitions are
+   captured too (`Record_Count` +2 per transition at `64b2cfac5`).
 10. **F-SCHED-I**: press `s`, then ReadProperty Chartreuse's `Present_Value` a
     moment later and confirm it moved to the demo value at priority 8;
     `Priority_For_Writing`/`Schedule_Default` on Saffron read back correctly.

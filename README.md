@@ -8,43 +8,38 @@ scheduling** - it answers **ReadProperty / ReadPropertyMultiple**, accepts
 **WriteProperty / WritePropertyMultiple**, accepts **SubscribeCOV**, generates
 **intrinsic life-safety alarms** (`CHANGE_OF_LIFE_SAFETY` EventNotifications),
 accepts **AcknowledgeAlarm** and **GetEventInformation**, implements (but -
-see below - cannot currently enable on the wire) a **LifeSafetyOperation**
-responder, maintains an **Event Log** (readable via ReadRange), runs an
-**internal Schedule + Calendar**, synchronises its clock, and handles
+see below - does not enable, because the default stack build leaves it out) a
+**LifeSafetyOperation** responder, maintains an **Event Log** (readable via
+ReadRange), runs an **internal Schedule + Calendar**, accepts time
+synchronisation, and handles
 **DeviceCommunicationControl** and **ReinitializeDevice**.
 
 **[Download a prebuilt binary](https://github.com/chipkin/BACnetProfileExample-B-ALSC-CPP/releases)**
 (Windows and Linux x64) - or build it yourself, see [Build](#build) below.
 
 - **[TUTORIAL.md](TUTORIAL.md)** - how to extend this example and how to review
-  it for conformance, including the Life Safety Point/Zone gap in detail. Read
+  it for conformance, including what changed for Life Safety Point/Zone. Read
   it when you start turning this into your own device.
 - **[docs/PICS.md](docs/PICS.md)** - the Protocol Implementation Conformance
   Statement: every object, every property, and who answers it.
 
-> **Versions:** this document describes **example v1.0.0**, built and verified
-> against **CAS BACnet Stack 6.0.21 (`6.x` @ `abd4cee1`)**, at
-> **Protocol_Revision 24**, with the vendored `common/` helper at **v2.5.0**.
+> **Versions:** this document describes **example v1.1.0**, built and verified
+> against **CAS BACnet Stack 6.0.23 (`6.x` @ `64b2cfac5`)**, at
+> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.3.0**.
 > Running the example prints all three - if what it prints disagrees with this
 > line, trust the program and check `CHANGELOG.md`.
 
-> **⚠ CRITICAL, VERIFIED LIMITATION: Life Safety Point/Zone objects (Amber,
-> Azure) currently cannot serve almost any property over the wire.** This is a
-> **stack-source gap, inherited unchanged from
-> [B-LSC](https://github.com/chipkin/BACnetProfileExample-B-LSC-CPP)** (this
-> repository's seed): `Object_List` correctly lists both objects and
-> `Object_Type` reads back, but `Object_Name`, `Present_Value`,
-> `Out_Of_Service`, and every other property answer
-> `Error(...): object: unknown-object` - and the same WriteProperty of
-> `Present_Value` this README uses as the alarm/fault demo trigger fails the
-> same way. **Root cause is in the stack, not this example's code** - see
-> [TUTORIAL.md](TUTORIAL.md#the-life-safety-pointzone-gap-issue-2036) and
-> [TODO.md #0](TODO.md) for the full trace and the filed stack issue
-> ([chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036)).
-> Event Log 1 "Beige"'s alarm-capture demo is blocked for the same reason (see
-> [TODO.md #3](TODO.md)); Beige's own properties are independently verified
-> working. Full list of what is and isn't implemented is in
-> [TODO.md](TODO.md).
+> **Status at stack `6.x` @ `64b2cfac5`** (checked over the wire 2026-10-15):
+> Life Safety Point 1 "Amber" and Life Safety Zone 1 "Azure" serve every
+> property they list (up to stack `abd4cee1` both answered `unknown-object`;
+> stack #2187 fixed it), and a WriteProperty of Amber's `Present_Value` drives
+> the intrinsic algorithms - alarm `2` -> life-safety-alarm, fault `3` ->
+> fault, quiet `0` -> normal, one `CHANGE_OF_LIFE_SAFETY` notification each.
+> Event Log 1 "Beige" records them once its `Enable` is written TRUE. Still
+> missing: LifeSafetyOperation (so AE-LS-B is met in part), `Zone_Members`
+> (always empty; [chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036),
+> open), and an end-to-end check of AcknowledgeAlarm / GetEventInformation.
+> Full list in [TODO.md](TODO.md).
 
 This example is seeded from
 [B-LSC (Life Safety Controller)](https://github.com/chipkin/BACnetProfileExample-B-LSC-CPP)
@@ -67,10 +62,10 @@ unchanged from B-LSC.
 | DS-WP-B | Data Sharing - WriteProperty - B | ✅ |
 | DS-WPM-B | Data Sharing - WritePropertyMultiple - B | ✅ |
 | DS-COV-B | Data Sharing - COV - B | ✅ |
-| AE-LS-B | Generate life-safety event notifications | ✅ (intrinsic ChangeOfLifeSafety + fault; alarming itself is blocked by issue #2036 - see the callout above) |
-| AE-ACK-B | Accept AcknowledgeAlarm | ✅ |
-| AE-INFO-B | Answer GetEventInformation | ✅ |
-| AE-EL-I-B | Event Log + ReadRange | ✅ (Event Log 1 "Beige"; own properties verified, alarm-capture demo blocked by the same issue) |
+| AE-LS-B | Generate life-safety event notifications, process silence/reset | ⚠ part: intrinsic ChangeOfLifeSafety + fault notifications work; LifeSafetyOperation (silence/reset) is not executed - see above |
+| AE-ACK-B | Accept AcknowledgeAlarm | ✅ configured; not verified |
+| AE-INFO-B | Answer GetEventInformation | ✅ configured; not verified |
+| AE-EL-I-B | Event Log + ReadRange | ✅ (Event Log 1 "Beige"; captures Amber's alarms once `Enable` is written TRUE - it starts FALSE) |
 | SCHED-I-B | Internal scheduling | ✅ (Schedule 1 "Saffron" + Calendar 1 "Cream") |
 | DM-DDB-A, DM-DDB-B | Who-Is/I-Am (answer + initiate) | ✅ |
 | DM-DOB-B | Who-Has/I-Have | ✅ |
@@ -78,9 +73,10 @@ unchanged from B-LSC.
 | DM-TS-B / DM-UTC-B | Time synchronisation | ✅ |
 | DM-RD-B | ReinitializeDevice | ✅ (cold/warm start) |
 
-`DM-LSO-B` (LifeSafetyOperation) is implemented in this example's code but not
-currently enabled on the wire (see "What this example does NOT do yet" below);
-it is not itself a BIBB the B-ALSC profile requires.
+LifeSafetyOperation is implemented in this example's code but not enabled (see
+"What this example does NOT do yet" below). That matters: AE-LS-B, which
+B-ALSC requires, includes executing it (135-2024 K.2.13, "able to process
+silence and reset operations on its life safety objects").
 
 Every required property of every object, and who answers it, is in
 [docs/PICS.md](docs/PICS.md).
@@ -99,8 +95,8 @@ the write, `Event_State` becomes `life-safety-alarm`, and an
 `UnconfirmedEventNotification` goes out to the recipient. Write `0` (quiet) to
 return to normal. By default the recipient is the **local subnet broadcast** (so
 any client sees the alarm); point it at a specific client in `main.cpp`.
-**As shipped, this WriteProperty itself currently fails - see the ⚠ callout
-above and [TODO.md #0](TODO.md) before trying this.**
+Checked over the wire at stack `64b2cfac5`: `2` -> life-safety-alarm, `3` ->
+fault, `0` -> normal, one notification each.
 
 **LifeSafetyOperation.** A client sends `silence` / `unsilence` (whole,
 audible-only, or visual-only) or `reset` / `reset-alarm` / `reset-fault` -
@@ -108,8 +104,8 @@ audible-only, or visual-only) or `reset` / `reset-alarm` / `reset-fault` -
 `LifeSafetyOperation()`, which updates `Silenced` and (for a RESET) `Present_Value`
 for Amber, Azure, or both. **The service is implemented in this example's code
 but not currently enabled on the wire** - see "What this example does NOT do
-yet" below; DM-LSO-B is not itself a BIBB B-ALSC requires, so this does not
-affect the BIBB table above.
+yet" below. AE-LS-B includes executing it (K.2.13), so AE-LS-B is marked
+"part" in the BIBB table above.
 
 ## F-EVENTLOG: Event Log 1 "Beige" (this repository's new feature)
 
@@ -117,9 +113,10 @@ affect the BIBB table above.
 properties (`Enable`, `Buffer_Size`, `Record_Count`, `Total_Record_Count`,
 `Log_Buffer`, ...) are held and served **by the stack itself**, answered
 before this file's own callbacks are ever consulted. `Log_Buffer` is read with
-**ReadRange** (service 35) - a plain ReadProperty of it is not refused, but
-per the stack's own doc comment it always answers an empty list, so use
-ReadRange.
+**ReadRange** (service 35). A plain ReadProperty of it is refused with
+PROPERTY / READ_ACCESS_DENIED, as 135-2024 requires ("The log buffer is not
+network accessible except through the use of the ReadRange service", cl.
+12.27.13); the Wire Tests check that.
 
 **Verified over the wire** (a real BACnet client, against this repository's own build):
 `Object_Name`/`Object_Type`/`Buffer_Size`/`Record_Count`/`Total_Record_Count`
@@ -130,14 +127,13 @@ clause-12.27-mandated log-status transition) was captured automatically -
 `Record_Count`/`Total_Record_Count` moved `0`→`1` and `ReadRange` returned
 exactly that record, with **no application code involved**.
 
-**Not verified: capturing Amber's/Azure's own alarm.** Per
-`BACnetStack_AddEventLogObject`'s doc comment, `Log_Buffer` "normally
-accumulate[s] from received event notifications" - an automatic capture, not
-an application call (`BACnetStack_InsertEventLogRecord`, the only app-facing
-way to insert a record directly, was moved to the test-tool surface in v6 and
-is forbidden by this series, so this example never calls it and never fakes a
-record). Demonstrating that requires Amber/Azure to actually reach `alarm(2)`
-- which is exactly what issue #2036 blocks. See [TODO.md #3](TODO.md).
+**Capturing Amber's own alarm works at stack `64b2cfac5`, once `Enable` is
+TRUE.** `Enable` starts FALSE. Checked over the wire: write `Enable` TRUE
+(`Record_Count` 0 -> 1, the log-status record), then Amber `Present_Value`
+2 / 0 / 3 / 0 - `Record_Count` 1 -> 3 -> 5 -> 7 -> 9. The capture is the
+stack's, from the event notifications; this example never inserts a record
+(`BACnetStack_InsertEventLogRecord` is test-tool only). The records' content
+was not read back with ReadRange in that check.
 
 ## F-SCHED-I: Schedule 1 "Saffron" + Calendar 1 "Cream" (copied from B-AAC)
 
@@ -152,11 +148,11 @@ see the Calendar note below) are seeded at start-up; the **`s`** key adds a
 `Weekly_Schedule` transition for right now so the change can be observed
 without waiting for the wall clock.
 
-**Calendar 1 "Cream"** exists for SCHED-I-B completeness, but its `Date_List`
-cannot be populated through the customer API
-([cas-bacnet-stack#963](https://github.com/chipkin/cas-bacnet-stack/issues/963)
-- see `TODO.md`); `Present_Value` always answers `false` rather than evaluating
-a `Date_List` that is never populated. **Verified over the wire:**
+**Calendar 1 "Cream"** exists for SCHED-I-B completeness. It is added with
+plain `BACnetStack_AddObject`, so its `Date_List` is empty and `Present_Value`
+answers `false`. The stack now has a stack-held Calendar
+(`BACnetStack_AddCalendarObject`; stack issues #963 and #2034 are closed) that
+this example does not use yet - see `TODO.md`. **Verified over the wire:**
 `Object_Name`, `Priority_For_Writing` (8), and `Schedule_Default` all read
 back correctly on Saffron; `Object_Name` and `Present_Value` (`false`) on
 Cream.
@@ -168,7 +164,7 @@ are COV-subscribable (`BACnetStack_SetPropertySubscribable`); subscription limit
 are set with `SetCOVSettings`/`SetMaxActiveCOVSubscriptions`. A subscriber is
 notified only when the application calls `BACnetStack_UpdateValue` for the
 changed property - the up/down key (Bronze) and a `Present_Value` WriteProperty
-(Amber) both already do this (the latter currently blocked - see above).
+(Amber) both already do this.
 
 ## F-REINIT (DM-RD-B)
 
@@ -193,7 +189,7 @@ Device 389008  "Chipkin Example B-ALSC"   (Vendor 389 - Chipkin Automation Syste
     ├── Notification Class 1  "Crimson"     routes Amber's/Azure's alarms to recipients
     ├── Event Log 1           "Beige"       Log_Buffer via ReadRange; Log_Enable writable
     ├── Schedule 1             "Saffron"     drives Chartreuse on a weekly + exception basis
-    ├── Calendar 1             "Cream"       Date_List not evaluable (see TODO.md)
+    ├── Calendar 1             "Cream"       Date_List empty (see TODO.md)
     └── Network Port 1        "Vermilion"   the BACnet/IP port (required)
 ```
 
@@ -208,18 +204,18 @@ standard CAS BACnet Stack does not yet expose a way to (or, for
 LifeSafetyOperation, ship a build configured to). Full detail and "what it
 would take" is in [TODO.md](TODO.md).
 
-- **⚠ Life Safety Point 1 (Amber) and Life Safety Zone 1 (Azure) cannot serve
-  almost any property.** See [TODO.md #0](TODO.md) and
-  [chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036).
-- **Life Safety Zone 1 (Azure)'s `Zone_Members`** - a required (cl. 12.16)
-  constructed property with no customer-facing serving path. See
-  [TODO.md #1](TODO.md).
-- **LifeSafetyOperation is not enabled on the wire** -
-  `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION` is not part of this series'
-  build preset. See [TODO.md #2](TODO.md).
-- **⚠ Event Log 1 (Beige) cannot demonstrate capturing Amber's/Azure's own
-  alarm** - the SAME root cause as the Life Safety gap above, not a new one.
-  See [TODO.md #3](TODO.md).
+- **Life Safety Zone 1 (Azure)'s `Zone_Members`** - required (cl. 12.16); the
+  stack lists it and it reads as an empty list, but the customer interface
+  cannot set it
+  ([chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036),
+  open). See [TODO.md #1](TODO.md).
+- **LifeSafetyOperation is not enabled** -
+  `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION` is not part of the stack's default
+  preset, so AE-LS-B is met only in part. See [TODO.md #2](TODO.md).
+- **No simulated detector, no particular recipient** - only a client write
+  raises an alarm, and Notification Class 1 sends to the subnet broadcast,
+  unconfirmed. AcknowledgeAlarm and GetEventInformation have not been
+  exercised end to end at this pin. See [TODO.md #3](TODO.md).
 
 ## Requires the CAS BACnet Stack (licensed product)
 
@@ -246,6 +242,8 @@ This is a **self-contained** project. It ships:
 - `common/` - the shared helper (UDP, callbacks, CLI, keyboard) vendored in.
 - `CMakeLists.txt` - the build, the same on Windows, Linux, and macOS.
 - `docs/PICS.md` - the conformance statement.
+- `tests/` - the Wire Tests (see [Wire Tests](#wire-tests)), and `wiretest/`, the
+  series' shared Python harness they are written against (vendored, like `common/`).
 - `submodules/cas-bacnet-stack/` - the **CAS BACnet Stack as a git submodule**
   (private; requires a license - see above). Its sources are compiled into the
   executable, so there is no library or DLL to build, ship, or install.
@@ -307,11 +305,11 @@ Options: `--port <n>` (default 47808), `--deviceID <n>` (default 389008),
 Expected output:
 
 ```
-BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.0.0
-CAS BACnet Stack version: 6.0.21.0
-Common helper (common/) version: 2.5.0
+BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.1.0
+CAS BACnet Stack version: 6.0.23.0
+Common helper (common/) version: 3.3.0
 FYI: Listening for BACnet/IP on UDP port 47808 (Network Port 1).
-TX 21 bytes to 192.168.3.255:47808 (broadcast) (Network Port 1)
+TX 21 bytes to 192.168.3.255:47808 (broadcast) (Network Port 1) - Unconfirmed: I-Am
 FYI: Device 389008 ("Chipkin Example B-ALSC") ready. Vendor ID 389. Press 'h' for help.
 ```
 
@@ -347,10 +345,12 @@ Use a BACnet client such as the
 
 1. **Discover** - send a **Who-Is**. The device replies with **I-Am** from
    instance **389008** (vendor **389**). It also broadcasts an I-Am at start-up.
-2. **Browse the object model** - thirteen objects, including Life Safety Point
-   "Amber", Life Safety Zone "Azure", Notification Class "Crimson", Event Log
-   "Beige", Schedule "Saffron", and Calendar "Cream". Reading the Device's
-   `Object_List` returns all thirteen.
+2. **Browse the object model** - thirteen objects besides the Device, including
+   Life Safety Point "Amber", Life Safety Zone "Azure", Notification Class
+   "Crimson", Event Log "Beige", Schedule "Saffron", and Calendar "Cream".
+   Reading the Device's `Object_List` returns fourteen entries (the Device
+   too), and every property each object lists reads as a value (the Wire Tests
+   check this).
 3. **Read a sensor and a commandable output** - ReadProperty Analog Input `1`
    -> `Present_Value` returns `21.5`. WriteProperty Analog Output `1`
    (`Chartreuse`) at a priority, re-read it, then write `NULL` to relinquish
@@ -359,19 +359,38 @@ Use a BACnet client such as the
    read correctly; `Log_Enable` WriteProperty round-trips; `ReadRange` of
    `Log_Buffer` succeeds and returns a real record after toggling `Log_Enable`.
 5. **Fire a life-safety alarm** - WriteProperty Amber's `Present_Value` = `2`
-   (alarm); expect this to **currently fail** with `unknown-object` - see the
-   ⚠ callout above and [TODO.md #0](TODO.md).
+   (alarm): `Event_State` becomes `life-safety-alarm` and an
+   `UnconfirmedEventNotification` is broadcast; with Beige's `Enable` TRUE,
+   `Record_Count` goes up. Write `0` to clear.
 6. **Schedule** - press `s`, then ReadProperty Chartreuse's `Present_Value` a
    moment later; it moves to the demo value at priority 8.
 
 For a full property-by-property review against the conformance statement, see
 [TUTORIAL.md](TUTORIAL.md).
 
+## Wire Tests
+
+Discovery, automated: a Python BACnet client drives the running example over
+BACnet/IP from outside it, the way a client discovers a device - Who-Is, the
+Device's `Object_List`, then for every object its `Property_List` and a
+ReadProperty of every property it lists. Every read must come back as a value,
+except Event Log 1's `Log_Buffer`, which must be refused with PROPERTY /
+READ_ACCESS_DENIED (cl. 12.27.13). Python 3 standard library only:
+
+```bash
+python3 tests/run_wire_tests.py --exe build/BACnetExampleBALSC          # Linux/macOS
+python tests\run_wire_tests.py --exe build\Release\BACnetExampleBALSC.exe   # Windows
+```
+
+It ends with `ALL WIRE TESTS PASSED` (exit 0). CI runs it on Linux after the
+smoke test. [tests/README.md](tests/README.md) says what each check proves. It
+does not test the life-safety alarms or the Event Log capture yet.
+
 
 ## The BACnet profile example series
 
 <!-- PROFILE-TABLE:BEGIN (generated from cas-bacnet-stack-examples/docs/profile-table.md - do not edit here) -->
-The CAS BACnet Stack supports every standardized device profile in ASHRAE 135-2024 Annex L, and there is one example repository per profile. Pick the profile your device claims, then the language you build in. "Ask" means the example hasn't been built yet for that language - [contact Chipkin](https://store.chipkin.com/contact-us) if you need one.
+There is one example repository per standardized device profile in ASHRAE 135-2024 Annex L. An example marked ⛔ is blocked: the stack cannot yet perform that profile's function through its customer interface, and the example's README says what it does today. Pick the profile your device claims, then the language you build in. "Ask" means the example hasn't been built yet for that language - [contact Chipkin](https://store.chipkin.com/contact-us) if you need one.
 
 ### Controllers (Annex L.4)
 
@@ -394,8 +413,8 @@ The CAS BACnet Stack supports every standardized device profile in ASHRAE 135-20
 
 | Profile | C++ | Node.js | C# | Rust | Python | Go |
 |---|---|---|---|---|---|---|
-| **B-ACC** Access Control Controller | [B-ACC-CPP](https://github.com/chipkin/BACnetProfileExample-B-ACC-CPP) | Ask | Ask | Ask | Ask | Ask |
-| **B-AACC** Advanced Access Control Controller | [B-AACC-CPP](https://github.com/chipkin/BACnetProfileExample-B-AACC-CPP) | Ask | Ask | Ask | Ask | Ask |
+| **B-ACC** Access Control Controller | [B-ACC-CPP](https://github.com/chipkin/BACnetProfileExample-B-ACC-CPP) ⛔ blocked on [stack #2150](https://github.com/chipkin/cas-bacnet-stack/issues/2150), [#2044](https://github.com/chipkin/cas-bacnet-stack/issues/2044) | Ask | Ask | Ask | Ask | Ask |
+| **B-AACC** Advanced Access Control Controller | [B-AACC-CPP](https://github.com/chipkin/BACnetProfileExample-B-AACC-CPP) ⛔ blocked on [stack #2150](https://github.com/chipkin/cas-bacnet-stack/issues/2150), [#2044](https://github.com/chipkin/cas-bacnet-stack/issues/2044) | Ask | Ask | Ask | Ask | Ask |
 
 ### Lighting controllers (Annex L.11)
 
@@ -416,7 +435,7 @@ The CAS BACnet Stack supports every standardized device profile in ASHRAE 135-20
 
 | Profile | C++ | Node.js | C# | Rust | Python | Go |
 |---|---|---|---|---|---|---|
-| **B-AS** Authorization Server | [B-AS-CPP](https://github.com/chipkin/BACnetProfileExample-B-AS-CPP) | Ask | Ask | Ask | Ask | Ask |
+| **B-AS** Authorization Server | [B-AS-CPP](https://github.com/chipkin/BACnetProfileExample-B-AS-CPP) ⛔ blocked on [stack #2043](https://github.com/chipkin/cas-bacnet-stack/issues/2043) | Ask | Ask | Ask | Ask | Ask |
 
 ### Miscellaneous (Annex L.7, combinable with any one family)
 
@@ -424,10 +443,10 @@ The CAS BACnet Stack supports every standardized device profile in ASHRAE 135-20
 |---|---|---|---|---|---|---|
 | **B-BBMD** Broadcast Management Device | [B-BBMD-CPP](https://github.com/chipkin/BACnetProfileExample-B-BBMD-CPP) | Ask | Ask | Ask | Ask | Ask |
 | **B-ACDC** Access Control Door Controller | [B-ACDC-CPP](https://github.com/chipkin/BACnetProfileExample-B-ACDC-CPP) | Ask | Ask | Ask | Ask | Ask |
-| **B-ACCR** Access Control Credential Reader | [B-ACCR-CPP](https://github.com/chipkin/BACnetProfileExample-B-ACCR-CPP) | Ask | Ask | Ask | Ask | Ask |
+| **B-ACCR** Access Control Credential Reader | [B-ACCR-CPP](https://github.com/chipkin/BACnetProfileExample-B-ACCR-CPP) ⛔ blocked on [stack #3934](https://github.com/chipkin/cas-bacnet-stack/issues/3934) | Ask | Ask | Ask | Ask | Ask |
 | **B-RTR** Router | [B-RTR-CPP](https://github.com/chipkin/BACnetProfileExample-B-RTR-CPP) | Ask | Ask | Ask | Ask | Ask |
 | **B-GW** Gateway | [B-GW-CPP](https://github.com/chipkin/BACnetProfileExample-B-GW-CPP) | Ask | Ask | Ask | Ask | Ask |
-| **B-DAP** Device Address Proxy | [B-DAP-CPP](https://github.com/chipkin/BACnetProfileExample-B-DAP-CPP) | Ask | Ask | Ask | Ask | Ask |
+| **B-DAP** Device Address Proxy | [B-DAP-CPP](https://github.com/chipkin/BACnetProfileExample-B-DAP-CPP) ⛔ blocked on [stack #2032](https://github.com/chipkin/cas-bacnet-stack/issues/2032) | Ask | Ask | Ask | Ask | Ask |
 | **B-SCHUB** BACnet/SC Hub | [B-SCHUB-CPP](https://github.com/chipkin/BACnetProfileExample-B-SCHUB-CPP) | Ask | Ask | Ask | Ask | Ask |
 | **B-GENERAL** General device (Annex L.8) | *(satisfied by every example above)* | — | — | — | — | — |
 
@@ -455,7 +474,7 @@ Client-side profiles.
 | **B-EWS** Elevator Workstation | planned | — | — | — | — | — |
 | **B-AEWS** Advanced Elevator Workstation | planned | — | — | — | — | — |
 
-🚧 = in progress. "Ask" = not yet built for that language; contact Chipkin if you need it. Profile definitions: ANSI/ASHRAE 135-2024 Annex L. BIBB definitions: Annex K. Get the stack: <https://store.chipkin.com/services/stacks/bacnet-stack>.
+🚧 = in progress. ⛔ = Blocked Example (blocked on the named stack gap). "Ask" = not yet built for that language; contact Chipkin if you need it. Profile definitions: ANSI/ASHRAE 135-2024 Annex L. BIBB definitions: Annex K. Get the stack: <https://store.chipkin.com/services/stacks/bacnet-stack>.
 <!-- PROFILE-TABLE:END -->
 
 ## References

@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - unreleased
+
+### Changed
+
+- **Stack Pin moves to `6.x` @ `64b2cfac5` (6.0.23)** from `6.x` @ `abd4cee1`
+  (6.0.21), per the series rule that a pin moves to the latest `6.x` whenever an
+  example is updated. Based on `origin/main` (`515a192`); no local work was
+  unpushed and every other branch is older than main.
+- **Life Safety Point 1 "Amber" and Life Safety Zone 1 "Azure" work over the
+  wire at this pin.** Up to `abd4cee1` both answered `unknown-object` for almost
+  every property (the old TODO.md item 0). Stack #2187 makes the stack fall
+  through to this example's callbacks: every listed property reads, and a
+  WriteProperty of `Present_Value` drives the intrinsic algorithms. The README,
+  TUTORIAL, AGENTS.md, PICS and `main.cpp` header no longer call this example
+  blocked; stack #2036 stays open for `Zone_Members` (TODO.md item 1).
+- **Protocol_Revision 24 -> 30** (the stack's default at the new pin).
+- **Segmentation is now supported** (`segmented-both`), by the stack (stack
+  #2992). `docs/PICS.md` section 5 updated and the objects block regenerated.
+- **`common/` 3.0.0 -> 3.3.0**, copied verbatim from B-SS-CPP `b640a81`.
+- README, TUTORIAL, AGENTS.md and PICS version lines: stack 6.0.23, `common/`
+  3.3.0, Protocol_Revision 30. README profile table re-synced. APP_VERSION
+  1.0.2 -> 1.1.0.
+
+### Fixed
+
+- **An alarm(2) now raises LIFE_SAFETY_ALARM, as the docs always said.**
+  `BACnetStack_SetIntrinsicChangeOfLifeSafetyAlgorithm` was given alarm(2) as an
+  `alarmValues` entry, which the stack documents as driving the object to
+  OFFNORMAL; it is now a `lifeSafetyAlarmValues` entry. Checked over the wire:
+  Amber `Present_Value` 2 -> `Event_State` life-safety-alarm (it read offnormal
+  before), 3 -> fault, 0 -> normal, one event notification each.
+- **Local_Date and Local_Time read as values.** Executing TimeSynchronization
+  makes the stack list both on the Device (135-2024 Table 12-13 footnotes 3 and
+  4), but nothing served them, so both reads failed `value-not-initialized`. The
+  discovery Wire Test found it. The example now serves them from the host clock,
+  updated by TimeSynchronization, the way B-LD-CPP does. That also fixed
+  **Schedule 1's Present_Value**, which read `value-not-initialized` too: the
+  stack's Schedule engine works from Local_Date. It now reads 20.0
+  (`Schedule_Default`).
+- **Event Log 1 capturing Amber's alarms is no longer described as blocked.**
+  At this pin, with `Enable` written TRUE (it starts FALSE), Amber
+  `Present_Value` 2 / 0 / 3 / 0 moved `Record_Count` 1 -> 3 -> 5 -> 7 -> 9. The
+  README no longer says a ReadProperty of `Log_Buffer` answers an empty list:
+  the stack refuses it with PROPERTY / READ_ACCESS_DENIED, as cl. 12.27.13
+  requires. Calendar 1's notes no longer cite #963 (closed) as the reason its
+  Date_List is empty.
+- **AE-LS-B is marked as met in part, not ✅.** AE-LS-B includes executing
+  LifeSafetyOperation (135-2024 K.2.13), which the default stack build does not
+  compile, so this example cannot silence or reset. TODO.md item 2 no longer
+  says DM-LSO-B is "not a BIBB this profile requires" or that enabling it needs
+  a stack edit (the example's own CMake can define the option; phase-2 work).
+- AE-ACK-B and AE-INFO-B are marked "configured; not verified" until a test
+  exercises them.
+
+### Added
+
+- **Wire Tests** (`tests/`, README "Wire Tests"): `tests/discovery_test.py`, the
+  series' discovery test from B-SS-CPP `da3e96f` with this example's
+  fourteen objects as its control, plus one spec-required refusal: Event Log 1's
+  `Log_Buffer` must answer PROPERTY / READ_ACCESS_DENIED (cl. 12.27.13,
+  15.5.1.3.1). CI runs it on Linux after the smoke test. Result: 21/21, 214 reads on Windows (STATIC) and Linux (SOURCE).
+- `wiretest/` 0.5.0, the series' shared Wiretest Harness, vendored verbatim from
+  B-BBMD-CPP `75aedd8`.
+
 ## [1.0.2] - unreleased
 
 ### Changed

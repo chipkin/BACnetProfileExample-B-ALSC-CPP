@@ -8,12 +8,12 @@ Read this once before you start changing `main.cpp`. The most expensive mistake
 in this example is silent, and the section it lives in is
 [Add a second analog input](#add-a-second-analog-input). The single most
 important thing to understand before touching Life Safety Point or Zone is the
-[Life Safety Point/Zone gap](#the-life-safety-pointzone-gap-issue-2036) section -
+[Life Safety Point/Zone section](#life-safety-pointzone-at-this-stack-pin-issue-2036) section -
 read it before you spend time debugging a `WriteProperty` to Amber or Azure that
 "should" work.
 
 - [Extending the example](#extending-the-example)
-- [The Life Safety Point/Zone gap (issue #2036)](#the-life-safety-pointzone-gap-issue-2036)
+- [Life Safety Point/Zone at this Stack Pin (issue #2036)](#life-safety-pointzone-at-this-stack-pin-issue-2036)
 - [What each object type needs you to serve](#what-each-object-type-needs-you-to-serve)
 - [Who serves what: the application or the stack?](#who-serves-what-the-application-or-the-stack)
 - [Reviewing your device](#reviewing-your-device)
@@ -105,50 +105,31 @@ Any property that comes back `"undefined"`, `no-units`, or `0` where object 1
 returns something real is a step you missed. Because the failure is silent (see
 the table above), this diff is the only thing that catches it.
 
-## The Life Safety Point/Zone gap (issue #2036)
+## Life Safety Point/Zone at this Stack Pin (issue #2036)
 
-**This is the most important thing to understand before touching Life Safety
-Point 1 "Amber" or Life Safety Zone 1 "Azure".**
-
-`BACnetStack_AddObject` - the only customer-facing way to create either object
-type - never populates the stack's internal life-safety engine object. Only the
-internal, non-exported `BACnetDBDevice::AddLifeSafetyPointObject`/
-`AddLifeSafetyZoneObject` do that. The result: `GetGeneratedPropertyValue`/
-`SetGeneratedPropertyValue` special-case these two object types and answer
-`unknown-object` for almost every property - **before this file's own
-`GetProperty*`/`SetProperty*` callbacks are ever reached**. Confirmed with a
-live BACnet client against this repository's own build:
+Up to stack `abd4cee1`, `BACnetStack_AddObject` - the only customer-facing way to
+create a Life Safety Point or Zone - left the stack without its internal
+life-safety object, and the stack answered `unknown-object` for almost every
+property **before this file's own `GetProperty*`/`SetProperty*` callbacks were
+reached**:
 
 ```
-ReadProperty life-safety-point,1 . objectIdentifier  -> OK (life-safety-point,1)
-ReadProperty life-safety-point,1 . objectType        -> OK (life-safety-point)
 ReadProperty life-safety-point,1 . objectName        -> Error(read-property): object: unknown-object
-ReadProperty life-safety-point,1 . presentValue      -> Error(read-property): object: unknown-object
 WriteProperty life-safety-point,1 . presentValue = 2 -> Error(write-property): object: unknown-object
 ```
 
-This means the alarm/fault demo this README and `main.cpp` describe -
-`WriteProperty` Amber's `Present_Value` to `2` to fire a `ChangeOfLifeSafety`
-alarm - **currently fails end-to-end**, and so does the Event Log's
-alarm-capture demo, which depends on that same alarm actually firing (see
-[TODO.md #3](TODO.md)).
+At `6.x` @ `64b2cfac5` that is fixed (stack #2187: the stack falls through to the
+host callbacks). Every listed property of Amber and Azure reads, and the alarm
+demo works: `Present_Value` `2` -> `Event_State` life-safety-alarm, `3` -> fault,
+`0` -> normal, one event notification each (checked over the wire 2026-10-15).
 
-**This is a stack-source gap, not an error in how this file follows the
-documented `AddObject` + `Get/Set` callback pattern.** Every other object in
-this file uses the identical generic pattern and works correctly. Do not
-"fix" this by trying a different application-level approach - there is none;
-see [TODO.md #0](TODO.md) for the full trace, the stack source line numbers,
-and the filed stack issue
-([chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036)).
-When the stack exports `BACnetStack_AddLifeSafetyPointObject`/
-`AddLifeSafetyZoneObject`, the fix here is a small, mechanical addition right
-after the existing `BACnetStack_AddObject` calls - see TODO.md #0's "To do
-when available".
-
-Life Safety Zone 1 "Azure"'s `Zone_Members` has an **independent** gap even
-once #2036 is fixed: the only generic constructed-property callback,
-`BACnetStack_RegisterCallbackGetPropertyConstructed`, was moved to the
-test-tool-only surface and this series forbids it. See TODO.md #1.
+What stack issue
+[chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036)
+(customer `AddLifeSafetyPointObject` / `AddLifeSafetyZoneObject` exports, still
+open) would still add: the stack's own life-safety engine (Mode / Accepted_Modes /
+Silenced / zone roll-up, which this example stands in for with its own state),
+and a way to set Life Safety Zone 1's `Zone_Members`. `Zone_Members` reads as an
+empty list today; the only setter is test-tool only. See TODO.md #1.
 
 ## What each object type needs you to serve
 
@@ -161,11 +142,11 @@ It differs per type - this is the checklist, so you do not have to infer it:
 | Binary Input | `Present_Value` (Enumerated), `Object_Name` | `Polarity` |
 | Multi-State Input | `Present_Value` (Unsigned), `Object_Name` | `Number_Of_States`, `State_Text` |
 | Analog/Binary/Multi-State Output | `Object_Name`, `Units`/`Polarity`/`Number_Of_States`, `Relinquish_Default` | commandable - `Present_Value`/`Priority_Array`/`Current_Command_Priority` resolved by the stack from the priority array you populate |
-| Life Safety Point/Zone | `Object_Name`, `Present_Value`, `Tracking_Value`, `Reliability`, `Out_Of_Service`, `Mode`, `Silenced`, `Operation_Expected` | **configured but non-functional over the wire - see the gap above** |
+| Life Safety Point/Zone | `Object_Name`, `Present_Value`, `Tracking_Value`, `Reliability`, `Out_Of_Service`, `Mode`, `Silenced`, `Operation_Expected` | served by this file's callbacks; every listed property reads at `64b2cfac5` (see the Life Safety section above) |
 | Notification Class | `Object_Name` | `Priority`/`Ack_Required`/`Recipient_List` via `BACnetStack_AddNotificationClassObject`/`AddRecipientToNotificationClass`, not `GetProperty*` |
 | Event Log | `Object_Name` | everything else held by the stack's own Event Log engine (`BACnetStack_AddEventLogObject`) |
 | Schedule | `Object_Name`, `Reliability`, `Out_Of_Service` | `Present_Value`/`Effective_Period`/`Schedule_Default`/etc. held by the stack's Schedule engine |
-| Calendar | `Object_Name`, `Present_Value` | `Date_List` has no servable path (issue #963) - `Present_Value` always answers `false` |
+| Calendar | `Object_Name`, `Present_Value` | Added with plain `AddObject`, so `Date_List` is empty and `Present_Value` answers `false`; `BACnetStack_AddCalendarObject` (stack-held Date_List) is not used yet |
 
 ## Who serves what: the application or the stack?
 
@@ -186,12 +167,10 @@ picture:
 | `Object_Name` | **you** | `GetPropertyCharString` |
 | `Units` | **you** | `GetPropertyEnumerated` |
 
-Contrast that with Life Safety Point 1 "Amber": `Object_Identifier` and
-`Object_Type` are the ONLY properties actually reaching the stack's normal
-resolution path; everything else is intercepted and answered `unknown-object`
-regardless of what `main.cpp` implements (see the gap section above) - even
-though the callbacks for `Present_Value`, `Mode`, `Silenced` etc. are written
-and correct.
+Life Safety Point 1 "Amber" is served the same way at stack `64b2cfac5`: the
+callbacks for `Present_Value`, `Mode`, `Silenced` etc. are reached (up to
+`abd4cee1` the stack answered `unknown-object` before reaching them - see the
+Life Safety section above).
 
 Every object, not just these two, is in [docs/PICS.md](docs/PICS.md).
 
@@ -202,23 +181,21 @@ rather than against "it looked fine in the explorer":
 
 1. Regenerate [docs/PICS.md](docs/PICS.md) after editing `docs/objects.json`
    (see [Keeping the PICS honest](#keeping-the-pics-honest) below). A ⚠ row is a
-   required property nothing serves - distinct from Amber/Azure's rows, which
-   are marked `accepted` with a justification pointing at issue #2036, not ⚠.
+   required property nothing serves.
 2. Read **every** property listed for **every** object with a BACnet client, and
    compare the value against the PICS. `"undefined"`, `no-units` and `0` are the
-   three shapes a missed callback takes for a normal object; `unknown-object` is
-   the shape of the Life Safety Point/Zone gap and is expected there, not a new
-   bug.
+   three shapes a missed callback takes. `tests/run_wire_tests.py` reads every
+   listed property and fails on any that does not return a value.
 3. Diff a new object of a type against the existing one of that type. Anything
    that differs and shouldn't is a callback that matched on instance.
 4. Confirm a write to a read-only input (e.g. Bronze) is rejected, and that a
    write to a commandable output (e.g. Chartreuse) at a priority is accepted,
    read back, and relinquishes correctly to `Relinquish_Default` on NULL.
 5. Fire and clear a life-safety alarm on Amber and Azure (`Present_Value` = `2`
-   then `0`) - expect this to currently fail with `unknown-object`; that
-   confirms issue #2036 rather than a regression you introduced.
-6. Toggle Event Log 1 "Beige"'s `Enable` and confirm `Record_Count` advances -
-   this proves the capture hook works without needing step 5's blocked alarm.
+   then `0`): `Event_State` goes to `life-safety-alarm` and back to `normal`,
+   with a notification each time.
+6. Write Event Log 1 "Beige"'s `Enable` TRUE and confirm `Record_Count`
+   advances, then repeat step 5 and confirm it advances again.
 
 ### Keeping the PICS honest
 
@@ -248,7 +225,7 @@ and each one needs a justification. Anything required, not in `app` and not in
 |---------|-------------|
 | On start-up the app prints a wall of red `Error:` lines but the device works | **Expected - this is not your bug.** Two benign sources, both from the stack's own debug logging: (1) the device receives its **own** broadcast I-Am and logs a decode cascade (*"Services is not supported service=[0]"* ... *"Failed to process the incoming NPDU"*) - any BACnet/IP device that listens for broadcasts hears itself; (2) a one-time *"UUID has not been set. A UUID must be set for the BACnetSC device to start."* - the stack starts a BACnet/SC datalink these IP-only examples never configure. On a healthy start-up roughly half the output is these lines. |
 | `LifeSafetyOperation() ... This feature was not compiled` at start-up | **Expected.** `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION` is not part of this build; the callback is registered (harmless) but the service is not advertised. See TODO.md #2. |
-| `ReadProperty`/`WriteProperty` to Amber or Azure answers `unknown-object` | **Expected - not your bug.** This is issue #2036; see [The Life Safety Point/Zone gap](#the-life-safety-pointzone-gap-issue-2036) above. |
+| `ReadProperty`/`WriteProperty` to Amber or Azure answers `unknown-object` | You are on a stack older than `6.x` @ `64b2cfac5` (fixed by stack #2187). Move the Stack Pin forward; see [Life Safety Point/Zone at this Stack Pin](#life-safety-pointzone-at-this-stack-pin-issue-2036) above. |
 | CMake error: *"CAS BACnet Stack adapter not found under: ..."* | Submodules not initialized. Run `git submodule update --init --recursive` (or pass `-D CAS_STACK_DIR=...`). |
 | `CASBACnetStackDLL.h: No such file or directory` | Same - submodules not checked out. |
 | Windows: *"No CMAKE_CXX_COMPILER could be found"* | Install Visual Studio with the "Desktop development with C++" workload, then re-run from a fresh terminal. |

@@ -10,19 +10,14 @@ see [README.md](../README.md).
 > `CHANGE ALL OF THIS BEFORE YOU SHIP` block at the top of `main.cpp`. The
 > example has **not** been submitted for BTL certification.
 
-> **⚠ Life Safety Point 1 "Amber" and Life Safety Zone 1 "Azure" are
-> configured but non-functional.** `BACnetStack_AddObject` (the only
-> customer-facing way to create either object) never populates the stack's
-> internal life-safety engine object, so almost every property on both
-> objects answers `Error(...): object: unknown-object` over the wire -
-> `Object_Identifier`/`Object_Type` are the only exceptions. This is a
-> **stack-source gap**, not a defect in this example's code - see
-> [chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036)
-> and [TODO.md #0](../TODO.md). Both objects are marked accordingly in
-> section 6 below. Event Log 1 "Beige" cannot demonstrate capturing either
-> object's alarm for the identical reason (TODO.md #3), and Calendar 1
-> "Cream"'s `Date_List` cannot be populated through the customer API
-> ([cas-bacnet-stack#963](https://github.com/chipkin/cas-bacnet-stack/issues/963)).
+> **Status at stack `6.x` @ `64b2cfac5`.** Life Safety Point 1 "Amber" and Life
+> Safety Zone 1 "Azure" serve every property they list, and a WriteProperty of
+> `Present_Value` drives their intrinsic algorithms (checked over the wire). Up
+> to stack `abd4cee1` both answered `unknown-object` for almost every property
+> (fixed by stack #2187). Still missing: LifeSafetyOperation is not executed
+> (section 3), and Zone 1's `Zone_Members` is always empty
+> ([chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036),
+> open). See [TODO.md](../TODO.md).
 
 ## 1. Product description
 
@@ -32,17 +27,17 @@ see [README.md](../README.md).
 | **Vendor Identifier** | 389 |
 | **Product Name** | CAS BACnet Stack Example - B-ALSC |
 | **Product Model Number** | CAS BACnet Stack Example - B-ALSC |
-| **Application Software Version** | 1.0.0 |
-| **Firmware Revision** | 1.0.0 |
+| **Application Software Version** | 1.1.0 |
+| **Firmware Revision** | 6.0.23.0 (the CAS BACnet Stack version) |
 | **BACnet Protocol Version** | 1 |
-| **BACnet Protocol Revision** | 24 |
+| **BACnet Protocol Revision** | 30 |
 
 **Product Description:** a tutorial BACnet/IP device built on the CAS BACnet
 Stack that implements as much of the B-ALSC (Advanced Life Safety Controller)
 profile as the stack's customer-facing API supports. It presents read-only
 sensor objects, commandable outputs, a Life Safety Point and Zone with
-intrinsic alarming (configured but currently non-functional over the wire -
-see the callout above), an Event Log, and an internal Schedule + Calendar. It
+intrinsic alarming (working at stack `64b2cfac5` - see the callout above), an
+Event Log, and an internal Schedule + Calendar. It
 is a tutorial for implementers of the B-ALSC profile.
 
 ## 2. BACnet standardized device profile (Annex L)
@@ -62,10 +57,10 @@ superset of B-GENERAL's, a conformant B-ALSC device also satisfies
 | DS-WP-B | Data Sharing - WriteProperty - B | ✅ |
 | DS-WPM-B | Data Sharing - WritePropertyMultiple - B | ✅ |
 | DS-COV-B | Data Sharing - COV - B | ✅ |
-| AE-LS-B | Alarm and Event - Life Safety - B | ✅ (generation is armed; the write path that triggers it is blocked by #2036 - see callout above) |
-| AE-ACK-B | Alarm and Event - Acknowledge - B | ✅ |
-| AE-INFO-B | Alarm and Event - Information - B | ✅ |
-| AE-EL-I-B | Alarm and Event - Enrollment - Log - Initiate - B | ✅ (Event Log 1 "Beige"; own properties verified, alarm-capture demo blocked by #2036) |
+| AE-LS-B | Alarm and Event - Life Safety - B | ⚠ part: notifications work; LifeSafetyOperation (silence/reset, K.2.13) is not executed |
+| AE-ACK-B | Alarm and Event - Acknowledge - B | ✅ configured; not verified |
+| AE-INFO-B | Alarm and Event - Information - B | ✅ configured; not verified |
+| AE-EL-I-B | Alarm and Event - Enrollment - Log - Initiate - B | ✅ (Event Log 1 "Beige"; captures Amber's alarms once `Enable` is TRUE - it starts FALSE) |
 | SCHED-I-B | Scheduling - Internal - B | ✅ (Schedule 1 "Saffron" + Calendar 1 "Cream") |
 | DM-DDB-A | Device Management - Dynamic Device Binding - A | ✅ |
 | DM-DDB-B | Device Management - Dynamic Device Binding - B | ✅ |
@@ -75,9 +70,10 @@ superset of B-GENERAL's, a conformant B-ALSC device also satisfies
 | DM-UTC-B | Device Management - UTC Time Synchronization - B | ✅ |
 | DM-RD-B | Device Management - Reinitialize Device - B | ✅ |
 
-No other BIBBs are supported. `DM-LSO-B` (LifeSafetyOperation) is implemented
-in `main.cpp` but not enabled on the wire (see TODO.md #2); it is not itself a
-BIBB the B-ALSC profile requires.
+No other BIBBs are supported. LifeSafetyOperation is implemented in `main.cpp`
+but not enabled (see TODO.md #2). AE-LS-B lists it under Execute (135-2024
+K.2.13, "able to process silence and reset operations"), so AE-LS-B above is
+met only in part.
 
 ## 4. Application services supported
 
@@ -106,9 +102,16 @@ response to Who-Is.
 
 ## 5. Segmentation capability
 
-Segmentation is **not supported** in either direction
-(`Segmentation_Supported` = `no-segmentation`). `Max_APDU_Length_Accepted` is
-1476 octets, the BACnet/IP maximum.
+Segmentation is **supported in both directions**
+(`Segmentation_Supported` = `segmented-both`), by the stack: at `6.x` @
+`64b2cfac5` the customer build compiles `STACK_OPTION_SEGMENTATION` in (stack
+#2992), and this example keeps the stack's defaults for `Max_Segments_Accepted`
+and `APDU_Segment_Timeout`. Table 12-13 footnote 1: "These properties are
+required if, and shall be present only if, segmentation of any kind is
+supported" - they are not rows in section 11 because its generator lists only
+unconditionally required properties. `Max_APDU_Length_Accepted` is 1476 octets,
+the BACnet/IP maximum. (At the previous pin, `abd4cee1`, this example answered
+`no-segmentation`.)
 
 ## 6. Standard object types supported
 
@@ -123,12 +126,12 @@ No object is dynamically creatable or deletable.
 | Analog Output | 1 | Chartreuse | Present_Value | Commandable, 16-slot `Priority_Array`; also the Schedule write target. |
 | Binary Output | 1 | Fuchsia | Present_Value | Commandable, 16-slot `Priority_Array`. |
 | Multi-State Output | 1 | Indigo | Present_Value | Commandable, 16-slot `Priority_Array`. |
-| Life Safety Point | 1 | Amber | Present_Value, Mode | ⚠ **Configured but non-functional** - only `Object_Identifier`/`Object_Type` are servable; every other property answers `unknown-object`. See [chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036) and TODO.md #0. |
-| Life Safety Zone | 1 | Azure | Present_Value, Mode | ⚠ **Configured but non-functional**, same cause as Amber. `Zone_Members` additionally has no servable path at all (TODO.md #1). |
+| Life Safety Point | 1 | Amber | Present_Value, Mode | Intrinsic ChangeOfLifeSafety + fault algorithms; every listed property reads at `64b2cfac5`. |
+| Life Safety Zone | 1 | Azure | Present_Value, Mode | As Amber. `Zone_Members` reads as an empty list and cannot be set through the customer interface (TODO.md #1). |
 | Notification Class | 1 | Crimson | - | Routes Amber's/Azure's alarm notifications. |
-| Event Log | 1 | Beige | Enable | Own properties (existence, `Log_Enable`, `ReadRange`, `Record_Count`) verified working; cannot demonstrate capturing Amber's/Azure's alarm (TODO.md #3, downstream of #2036). |
+| Event Log | 1 | Beige | Enable | Starts with `Enable` FALSE; once TRUE, captures Amber's alarm transitions (checked at `64b2cfac5`). `Log_Buffer` is ReadRange only. |
 | Schedule | 1 | Saffron | - | Drives Chartreuse at priority 8 on a weekly + exception basis. |
-| Calendar | 1 | Cream | - | `Date_List` cannot be populated through the customer API ([cas-bacnet-stack#963](https://github.com/chipkin/cas-bacnet-stack/issues/963)); `Present_Value` always answers `false`. |
+| Calendar | 1 | Cream | - | Added with plain `AddObject`: `Date_List` is empty, `Present_Value` answers `false` (the stack-held `AddCalendarObject` is not used yet). |
 | Network Port | 1 | Vermilion | - | Required on every device. |
 
 The device instance is configurable at run time with `--deviceID` (BACnet
@@ -184,7 +187,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Protocol_Object_Types_Supported | BACnetObjectTypesSupported | stack | no |
 | Object_List | BACnetARRAY[N] of BACnetObjectIdentifier | stack | no |
 | Max_APDU_Length_Accepted | Unsigned | stack default, accepted (`CAS_BACNET_DEVICE_DEFAULT_MAX_APDU_LENGTH_ACCEPTED`) | no |
-| Segmentation_Supported | BACnetSegmentation | stack default, accepted (`BACnetSegmentation::noSegmentation`) | no |
+| Segmentation_Supported | BACnetSegmentation | stack default, accepted (`BACnetSegmentation::segmentedBoth` with `STACK_OPTION_SEGME) | no |
 | APDU_Timeout | Unsigned | stack default, accepted (`CAS_BACNET_DEVICE_DEFAULT_APDU_TIMEOUT`) | no |
 | Number_Of_APDU_Retries | Unsigned | stack default, accepted (`CAS_BACNET_DEVICE_DEFAULT_NUMBER_OF_APDU_RETRIES`) | no |
 | Device_Address_Binding | BACnetLIST of BACnetAddressBinding | stack | no |
@@ -285,7 +288,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Property_List | BACnetARRAY[N] of BACnetPropertyIdentifier | stack | no |
 | Current_Command_Priority | BACnetOptionalUnsigned | stack | no |
 
-### Life Safety Point 1 "Amber" - VERIFIED CRITICAL GAP (TODO.md #0, carried forward from BACnetProfileExample-B-LSC-CPP and re-verified against this repository's own build): almost every property on this object currently answers unknown-object over the wire, because BACnetStack_AddObject never populates the stack internal life-safety engine object (AddLifeSafetyPointObject/AddLifeSafetyZoneObject are not customer-exported) - see chipkin/cas-bacnet-stack#2036. F-LIFESAFETY / F-ALARM-LS (canonical: B-LSC). BACnetLifeSafetyState Present_Value: quiet(0)/alarm(2)/fault(3); Tracking_Value mirrors it (this example's simplification - see main.cpp file header for why it does not use the stack's internal, non-customer-exported life-safety engine). Present_Value is made WRITABLE beyond the profile's read-only column purely as this tutorial's alarm/fault trigger (mirrors B-AAC's Diamond) - and that WriteProperty is exactly what issue #2036 blocks. Mode is required-writable by the profile and accepted unconditionally (no customer-facing Accepted_Modes setter exists - see the file header); Accepted_Modes is therefore accepted at the stack's generic default. Event_State is NOT actually a stack default here - it is genuinely computed, because this example arms ChangeOfLifeSafety + fault intrinsic algorithms on Amber (SetIntrinsicChangeOfLifeSafetyAlgorithm/SetFaultLifeSafetyAlgorithm); it is marked accepted only because property-profile-reference.md's generic table does not know an algorithm was armed (same convention as B-AAC's Diamond). Present_Value is also DS-COV-B subscribable
+### Life Safety Point 1 "Amber" - Every listed property reads at stack 64b2cfac5 (up to abd4cee1 almost all answered unknown-object; fixed by stack #2187). F-LIFESAFETY / F-ALARM-LS (canonical: B-LSC). BACnetLifeSafetyState Present_Value: quiet(0)/alarm(2)/fault(3); Tracking_Value mirrors it (this example's simplification - see main.cpp file header for why it does not use the stack's internal, non-customer-exported life-safety engine). Present_Value is made WRITABLE beyond the profile's read-only column purely as this tutorial's alarm/fault trigger (mirrors B-AAC's Diamond) - and that WriteProperty is exactly what issue #2036 blocks. Mode is required-writable by the profile and accepted unconditionally (no customer-facing Accepted_Modes setter exists - see the file header); Accepted_Modes is therefore accepted at the stack's generic default. Event_State is NOT actually a stack default here - it is genuinely computed, because this example arms ChangeOfLifeSafety + fault intrinsic algorithms on Amber (SetIntrinsicChangeOfLifeSafetyAlgorithm/SetFaultLifeSafetyAlgorithm); it is marked accepted only because property-profile-reference.md's generic table does not know an algorithm was armed (same convention as B-AAC's Diamond). Present_Value is also DS-COV-B subscribable
 
 | Property | Datatype | Served by | Writable |
 |---|---|---|:---:|
@@ -303,7 +306,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Silenced | BACnetSilencedState | app | no |
 | Operation_Expected | BACnetLifeSafetyOperation | app | no |
 
-### Life Safety Zone 1 "Azure" - VERIFIED CRITICAL GAP (TODO.md #0, carried forward from BACnetProfileExample-B-LSC-CPP and re-verified against this repository's own build): almost every property on this object currently answers unknown-object over the wire - see chipkin/cas-bacnet-stack#2036. F-LIFESAFETY / F-ALARM-LS. Event_State is genuinely computed (same as Amber's - ChangeOfLifeSafety + fault algorithms armed on Azure too), marked accepted for the same generator-limitation reason. Same shape as Amber (this example holds Azure's own independent Present_Value rather than rolling it up from Zone_Members - the stack's real zone roll-up engine is not customer-exported, see the file header). Zone_Members (cl. 12.16, required, BACnetLIST of BACnetDeviceObjectReference) has NO servable path on the customer surface: the only generic constructed-property callback, BACnetStack_RegisterCallbackGetPropertyConstructed, was moved to the test-tool DLL (CASBACnetStackDLL.h's own PR #193 review comment) and is forbidden by this series. See TODO.md and the filed stack issue - this is a real, verified gap, not a convenience shortcut
+### Life Safety Zone 1 "Azure" - Every listed property reads at stack 64b2cfac5 (up to abd4cee1 almost all answered unknown-object; fixed by stack #2187). F-LIFESAFETY / F-ALARM-LS. Event_State is genuinely computed (same as Amber's - ChangeOfLifeSafety + fault algorithms armed on Azure too), marked accepted for the same generator-limitation reason. Same shape as Amber (this example holds Azure's own independent Present_Value rather than rolling it up from Zone_Members - the stack's real zone roll-up engine is not customer-exported, see the file header). Zone_Members (cl. 12.16, required, BACnetLIST of BACnetDeviceObjectReference) reads as an empty list at 64b2cfac5: only the test-tool BACnetStackTestTool_SetLifeSafetyZoneMembers can fill it. See TODO.md and stack #2036 (open)
 
 | Property | Datatype | Served by | Writable |
 |---|---|---|:---:|
@@ -335,7 +338,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Recipient_List | BACnetLIST of BACnetDestination | stack default, accepted (None known - a read fails with `unknown-property` or an empt) | no |
 | Property_List | BACnetARRAY[N] of BACnetPropertyIdentifier | stack | no |
 
-### Event Log 1 "Beige" - F-EVENTLOG (canonical: this repository). Enable/Buffer_Size/Record_Count/Total_Record_Count/Log_Buffer/Status_Flags/Object_Identifier/Object_Type/Property_List are NOT stack defaults in the generic sense - they are genuinely held and served by the stack's own Event Log engine (BACnetStack_AddEventLogObject), answered from stack storage BEFORE this file's Get*/Set* callbacks are ever consulted; marked accepted only because property-profile-reference.md's generic table does not know about this object-specific engine. VERIFIED over the wire with a live BACnet client against this repository's own build: Object_Name/Object_Type/Buffer_Size/Record_Count/Total_Record_Count read correctly; Enable (property id 133) round-trips a WriteProperty false->true correctly; ReadRange of Log_Buffer (service 35, RangeByPosition) succeeds and returns real BACnetLogRecords - toggling Enable was independently captured as a clause-12.27 log-status transition with no application code involved (Record_Count/Total_Record_Count moved 0->1, ReadRange returned exactly that record), proving the automatic capture hook is live in this build. NOT verified: capturing Amber's/Azure's own CHANGE_OF_LIFE_SAFETY notification - that requires Amber/Azure to actually reach alarm(2), which is blocked by the SAME root cause as the Life Safety Point/Zone gap above (issue #2036) - see TODO.md #3. BACnetStack_InsertEventLogRecord (the only app-facing way to seed a record directly) was moved to the test-tool surface in v6 and is forbidden by this series, so this example never calls it and never fakes a record. Event_State is accepted at the stack's generic default (normal) - this example does not arm intrinsic reporting on Beige itself (only on Amber/Azure), matching the doc comment on BACnetStack_AddEventLogObject: with neither an alarm engine nor a callback armed, the stack answers normal(0)
+### Event Log 1 "Beige" - F-EVENTLOG (canonical: this repository). Enable/Buffer_Size/Record_Count/Total_Record_Count/Log_Buffer/Status_Flags/Object_Identifier/Object_Type/Property_List are NOT stack defaults in the generic sense - they are genuinely held and served by the stack's own Event Log engine (BACnetStack_AddEventLogObject), answered from stack storage BEFORE this file's Get*/Set* callbacks are ever consulted; marked accepted only because property-profile-reference.md's generic table does not know about this object-specific engine. VERIFIED over the wire with a live bacpypes3 client against this repository's own build: Object_Name/Object_Type/Buffer_Size/Record_Count/Total_Record_Count read correctly; Enable (property id 133) round-trips a WriteProperty false->true correctly; ReadRange of Log_Buffer (service 35, RangeByPosition) succeeds and returns real BACnetLogRecords - toggling Enable was independently captured as a clause-12.27 log-status transition with no application code involved (Record_Count/Total_Record_Count moved 0->1, ReadRange returned exactly that record), proving the automatic capture hook is live in this build. At stack 64b2cfac5, with Enable written TRUE (it starts FALSE), Amber's CHANGE_OF_LIFE_SAFETY transitions are captured too: Record_Count 1 -> 3 -> 5 -> 7 -> 9 over Present_Value 2/0/3/0 (record content not read back in that check). A ReadProperty of Log_Buffer is refused with PROPERTY / READ_ACCESS_DENIED (cl. 12.27.13). BACnetStack_InsertEventLogRecord (the only app-facing way to seed a record directly) was moved to the test-tool surface in v6 and is forbidden by this series, so this example never calls it and never fakes a record. Event_State is accepted at the stack's generic default (normal) - this example does not arm intrinsic reporting on Beige itself (only on Amber/Azure), matching the doc comment on BACnetStack_AddEventLogObject: with neither an alarm engine nor a callback armed, the stack answers normal(0)
 
 | Property | Datatype | Served by | Writable |
 |---|---|---|:---:|
@@ -364,7 +367,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Out_Of_Service | Boolean | app | no |
 | Property_List | BACnetARRAY[N] of BACnetPropertyIdentifier | stack | no |
 
-### Calendar 1 "Cream" - exists for SCHED-I-B completeness alongside Saffron's exception, but its Date_List cannot be populated through the customer API (cas-bacnet-stack issue #963 - no read path for a Calendar object's Date_List; the only generic constructed-property callback is test-tool-only). Present_Value therefore always answers false rather than evaluating a Date_List that is never populated - see TODO.md. VERIFIED over the wire: Object_Name and Present_Value (false) both read back correctly
+### Calendar 1 "Cream" - exists for SCHED-I-B completeness alongside Saffron's exception. It is added with plain BACnetStack_AddObject, so Date_List is empty and Present_Value answers false; the stack-held BACnetStack_AddCalendarObject (stack #963 and #2034 closed) is not used yet - see TODO.md. VERIFIED over the wire: Object_Name and Present_Value (false) both read back correctly
 
 | Property | Datatype | Served by | Writable |
 |---|---|---|:---:|
