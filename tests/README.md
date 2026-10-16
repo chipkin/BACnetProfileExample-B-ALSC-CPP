@@ -27,7 +27,7 @@ uses `--port` + 1. It takes about a minute. CI (`.github/workflows/release.yml`)
 runs it on Linux after the smoke test.
 
 A request that gets no answer at all is sent once more with a visible `[RETRY]`
-line (`wiretest_extras.request_with_retry`): a busy Windows host drops about 3 UDP
+line (the workstation is `wiretest.Workstation(retries=1)`): a busy Windows host drops about 3 UDP
 datagrams in 1000. An Error or Reject is an answer and is never retried.
 
 ## The setup
@@ -49,7 +49,6 @@ world: `detector smoke`, `detector quiet`, `detector fault`.
 | File | What it is |
 |---|---|
 | `alsc_setup.py` | This controller's numbers, starting it with the control channel, the requests the tests send. |
-| `wiretest_extras.py` | **Generic** helpers wiretest 0.6.0 lacks, proposed for 0.7.0 - the same file as B-LSC-CPP's, plus B-AEC-CPP's ReadRange / Event Log record decoders copied verbatim. |
 | `discovery_test.py` | Every listed property reads; `Log_Buffer` is refused. |
 | `life_safety_test.py`, `fault_test.py` | B-LSC-CPP's two tests with this device's numbers: the life-safety scenario and the detector fault. |
 | `event_log_test.py` | AE-EL-I-B: the alarm is logged, even when nobody hears it. |

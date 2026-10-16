@@ -67,7 +67,7 @@ three things:
 > **Versions:** this document describes **example v1.2.0**, built and verified
 > against **CAS BACnet Stack 6.0.23 (`6.x` @ `64b2cfac5`)**, at
 > **Protocol_Revision 30**, with the vendored `common/` helper at **v3.4.0**
-> and `wiretest/` at **v0.6.0**. Running the example prints the first three -
+> and `wiretest/` at **v0.7.0**. Running the example prints the first three -
 > if what it prints disagrees with this line, trust the program and check
 > `CHANGELOG.md`.
 

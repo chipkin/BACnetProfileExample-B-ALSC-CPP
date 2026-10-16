@@ -29,7 +29,6 @@ sys.path.insert(0, str(TESTS))
 import wiretest  # noqa: E402  (the vendored harness at the repository root)
 from wiretest import Workstation  # noqa: E402  (wiretest 0.6.0)
 from wiretest import alarm as alarm_codec  # noqa: E402
-import wiretest_extras as extras  # noqa: E402  (generic helpers proposed for wiretest 0.7.0)
 
 # Match main.cpp.
 DEVICE_INSTANCE = 389008
@@ -77,6 +76,13 @@ def parser(description):
     return arguments
 
 
+def workstation():
+    """The operator workstation (a wiretest.Workstation): a request that gets NO answer at all is
+    sent again once, with a visible [RETRY] line - a lost UDP datagram, seen about 3 in 1000 on a
+    busy Windows host. An Error or Reject is an answer and is never retried."""
+    return Workstation(retries=1)
+
+
 def start_controller(args):
     """The example, with its SIMULATION test control channel on --port + 1."""
     return wiretest.start(args.exe, ["--port", args.port], "controller",
@@ -85,32 +91,33 @@ def start_controller(args):
 
 def detector(args, reading):
     """Move the simulated detector: 'quiet', 'smoke' or 'fault'. Returns the channel's reply."""
-    return extras.SimulationControl(args.port + 1).command(f"detector {reading}")
+    with wiretest.SimulationControl(args.port + 1) as control:
+        return control.ask(f"detector {reading}")
 
 
 def write_recipient_list(workstation, args, destinations):
     """WriteProperty of Crimson's Recipient_List (a concatenation of alarm_codec.destination())."""
-    return extras.request_with_retry(workstation, lambda invoke_id: wiretest.write_property_request(
+    return workstation.request(lambda invoke_id: wiretest.write_property_request(
         invoke_id, *CRIMSON, alarm_codec.PROPERTY_RECIPIENT_LIST, destinations), args.port)
 
 
 def write_enable(workstation, args, enable):
     """WriteProperty of Event Log 1's Enable."""
-    return extras.request_with_retry(workstation, lambda invoke_id: wiretest.write_property_request(
+    return workstation.request(lambda invoke_id: wiretest.write_property_request(
         invoke_id, *BEIGE, PROPERTY_ENABLE, wiretest.application_boolean(enable)), args.port)
 
 
 def read_event_log(workstation, args, reference_index=None, count=None):
     """(ReadRange-ACK dict or None, its records, the Answer) for Event Log 1's Log_Buffer."""
-    answer = extras.request_with_retry(workstation, lambda invoke_id: extras.read_range_request(
+    answer = workstation.request(lambda invoke_id: wiretest.services.read_range_request(
         invoke_id, *BEIGE, PROPERTY_LOG_BUFFER, reference_index, count), args.port)
-    log = extras.parse_read_range_ack(answer)
-    return log, (extras.event_log_records(log["item_data"]) if log else []), answer
+    log = wiretest.services.parse_read_range_ack(answer)
+    return log, (wiretest.services.event_log_records(log["item_data"]) if log else []), answer
 
 
 def is_bound(workstation, args):
     """Does the panel's Device_Address_Binding list Device 389108 (the workstation)?"""
-    answer = extras.request_with_retry(workstation, lambda invoke_id: wiretest.read_property_request(
+    answer = workstation.request(lambda invoke_id: wiretest.read_property_request(
         invoke_id, *DEVICE, wiretest.PROPERTY_DEVICE_ADDRESS_BINDING), args.port)
     return answer.ok and (wiretest.OBJECT_TYPE_DEVICE, WORKSTATION_DEVICE_INSTANCE) in         wiretest.decoded_values(answer.value_octets)
 
@@ -119,14 +126,14 @@ def announce(workstation, args, seconds=5.0):
     """The workstation's I-Am as Device 389108 - what lets the panel address its alarms - sent
     (again each second) until the panel's Device_Address_Binding shows it. Returns whether it does."""
     def announced_and_bound():
-        extras.announce(workstation, WORKSTATION_DEVICE_INSTANCE, args.port)
+        workstation.announce(WORKSTATION_DEVICE_INSTANCE, args.port)
         return wiretest.wait_until(lambda: is_bound(workstation, args), 1.0)
     return bool(wiretest.wait_until(announced_and_bound, seconds, interval=0))
 
 
 def read(workstation, args, object_reference, property_identifier, array_index=None):
     """The decoded value of one property, or None (the Answer is printed on failure)."""
-    answer = extras.request_with_retry(workstation, lambda invoke_id: wiretest.read_property_request(
+    answer = workstation.request(lambda invoke_id: wiretest.read_property_request(
         invoke_id, *object_reference, property_identifier, array_index), args.port)
     if not answer.ok:
         print(f"      read {object_reference} property {property_identifier}: {answer.describe()}")
@@ -134,14 +141,13 @@ def read(workstation, args, object_reference, property_identifier, array_index=N
 
 
 def life_safety_operation(workstation, args, operation, object_reference=None, source="Operator Olive"):
-    return extras.request_with_retry(workstation, lambda invoke_id: extras.life_safety_operation_request(
+    return workstation.request(lambda invoke_id: wiretest.services.life_safety_operation_request(
         invoke_id, OPERATOR_PROCESS_IDENTIFIER, source, operation, object_reference), args.port)
 
 
 def get_event_information(workstation, args):
     """(summaries, more_events, Answer) from one GetEventInformation."""
-    answer = extras.request_with_retry(
-        workstation, lambda invoke_id: alarm_codec.get_event_information_request(invoke_id), args.port)
+    answer = workstation.request(lambda invoke_id: alarm_codec.get_event_information_request(invoke_id), args.port)
     if answer.frame is None or answer.frame.pdu_type != wiretest.PDU_COMPLEX_ACK:
         return None, None, answer
     summaries, more_events = alarm_codec.parse_event_summaries(answer.frame.payload)
@@ -166,7 +172,7 @@ def acknowledge(workstation, args, object_reference, event_state, time_stamp, so
     now = time.localtime()
     time_of_acknowledgment = (bytes([now.tm_year - 1900, now.tm_mon, now.tm_mday, now.tm_wday + 1]),
                               bytes([now.tm_hour, now.tm_min, now.tm_sec, 0]))
-    return extras.request_with_retry(workstation, lambda invoke_id: alarm_codec.acknowledge_alarm_request(
+    return workstation.request(lambda invoke_id: alarm_codec.acknowledge_alarm_request(
         invoke_id, OPERATOR_PROCESS_IDENTIFIER, *object_reference, event_state, time_stamp, source,
         time_of_acknowledgment), args.port)
 
@@ -182,4 +188,4 @@ def waited(notification, seconds=None):
     return notification.describe() if notification else f"nothing in {seconds or NOTIFICATION_WAIT} s"
 
 
-__all__ = ["Workstation", "alarm_codec", "extras", "wiretest"]
+__all__ = ["Workstation", "alarm_codec", "wiretest"]

@@ -22,11 +22,11 @@ import struct
 import sys
 
 import alsc_setup as setup
-from alsc_setup import Workstation, alarm_codec, extras, wiretest
+from alsc_setup import alarm_codec, wiretest
 from wiretest import record
 
 ALARM = alarm_codec
-LIFE_SAFETY_ALARM = extras.EVENT_STATE_LIFE_SAFETY_ALARM
+LIFE_SAFETY_ALARM = wiretest.alarm.EVENT_STATE_LIFE_SAFETY_ALARM
 SECOND_PROCESS_IDENTIFIER = 9
 
 
@@ -66,8 +66,8 @@ def run(first, second, args):
 def main():
     args = setup.parser(__doc__).parse_args()
     controller = setup.start_controller(args)
-    first = Workstation()
-    second = Workstation()
+    first = setup.workstation()
+    second = setup.workstation()
     try:
         run(first, second, args)
     finally:

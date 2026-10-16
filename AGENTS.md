@@ -44,7 +44,7 @@ This repository is self-contained:
 - `TODO.md` - what B-ALSC requires but the stack's customer surface cannot yet
   do, and why. Keep it honest and current.
 - `tests/` + `wiretest/` - the Wire Tests and the series' shared harness
-  (vendored; frozen at 0.6.0 - generic additions go in `tests/wiretest_extras.py`).
+  (vendored at 0.7.0; change it only as the series does, in every example).
   Every check must fail when its feature is removed: mutation-verify any change.
 - `submodules/cas-bacnet-stack/` - the **CAS BACnet Stack** as a git submodule
   (private; compiled from source). After cloning, run

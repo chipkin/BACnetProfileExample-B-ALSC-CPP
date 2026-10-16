@@ -52,6 +52,7 @@ device supports scheduling of internal values and event logging."
   PICS (regenerated; Number_Of_APDU_Retries, Reliability, Recipient_List, Calendar rows),
   AGENTS, TODO (rewritten), tests/README, release.yml step name. APP_VERSION 1.1.0 ->
   1.2.0.
+- Wire Tests use the shared `wiretest/` 0.7.0: `tests/wiretest_extras.py` is folded into it (`wiretest.services` life safety and ReadRange / Event Log records, `wiretest.SimulationControl`, `Workstation.announce`), and `request_with_retry` is `wiretest.Workstation(retries=1)`.
 
 ### Verified (2026-10-16)
 

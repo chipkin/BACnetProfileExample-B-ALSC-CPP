@@ -25,11 +25,11 @@ announces itself, so Notification Class 1's recipient (Device 389108) cannot be 
 import sys
 
 import alsc_setup as setup
-from alsc_setup import Workstation, alarm_codec, extras, wiretest
+from alsc_setup import alarm_codec, wiretest
 from wiretest import known_gap, record
 
 ALARM = alarm_codec
-LIFE_SAFETY_ALARM = extras.EVENT_STATE_LIFE_SAFETY_ALARM
+LIFE_SAFETY_ALARM = wiretest.alarm.EVENT_STATE_LIFE_SAFETY_ALARM
 
 
 def describe_records(records):
@@ -111,7 +111,7 @@ def run(workstation, args):
 def main():
     args = setup.parser(__doc__).parse_args()
     controller = setup.start_controller(args)
-    workstation = Workstation()
+    workstation = setup.workstation()
     try:
         run(workstation, args)
     finally:
