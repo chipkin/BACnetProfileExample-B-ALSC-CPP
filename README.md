@@ -25,7 +25,7 @@ synchronisation, and handles
 
 > **Versions:** this document describes **example v1.1.0**, built and verified
 > against **CAS BACnet Stack 6.0.23 (`6.x` @ `64b2cfac5`)**, at
-> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.3.0**.
+> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.4.0**.
 > Running the example prints all three - if what it prints disagrees with this
 > line, trust the program and check `CHANGELOG.md`.
 
@@ -307,7 +307,7 @@ Expected output:
 ```
 BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.1.0
 CAS BACnet Stack version: 6.0.23.0
-Common helper (common/) version: 3.3.0
+Common helper (common/) version: 3.4.0
 FYI: Listening for BACnet/IP on UDP port 47808 (Network Port 1).
 TX 21 bytes to 192.168.3.255:47808 (broadcast) (Network Port 1) - Unconfirmed: I-Am
 FYI: Device 389008 ("Chipkin Example B-ALSC") ready. Vendor ID 389. Press 'h' for help.
