@@ -6,11 +6,10 @@ the result for conformance, and what goes wrong when you get it subtly right.
 
 Read this once before you start changing `main.cpp`. The most expensive mistake
 in this example is silent, and the section it lives in is
-[Add a second analog input](#add-a-second-analog-input). The single most
-important thing to understand before touching Life Safety Point or Zone is the
-[Life Safety Point/Zone section](#life-safety-pointzone-at-this-stack-pin-issue-2036) section -
-read it before you spend time debugging a `WriteProperty` to Amber or Azure that
-"should" work.
+[Add a second analog input](#add-a-second-analog-input). Before touching Life
+Safety Point or Zone, read the
+[Life Safety Point/Zone section](#life-safety-pointzone-at-this-stack-pin-issue-2036):
+their state is this file's, not the stack's.
 
 - [Extending the example](#extending-the-example)
 - [Life Safety Point/Zone at this Stack Pin (issue #2036)](#life-safety-pointzone-at-this-stack-pin-issue-2036)
@@ -33,6 +32,31 @@ name, description, firmware revision and device name are all in the
 per-field note on each saying what to change it to. That block is the
 authoritative checklist; it is in the source rather than here so it cannot be
 skipped by someone who only reads the code.
+
+**Wire in a real detector** - the smoke detector is **Simulation** (`main.cpp`
+section 1b). Everything it does goes through `ApplyDetectorReading(reading)`:
+call it with `LIFE_SAFETY_STATE_QUIET`, `_ALARM` or `_FAULT` whenever your
+detector loop reports a change, from the main loop. Then delete `simulation/`,
+the `SimulationControl::` calls in `main()`, `HandleSimulationCommand()` and
+`SIMULATION_SOURCES` in `CMakeLists.txt`.
+
+**Change who gets the alarms** - Notification Class 1's start-up recipient is
+`RECIPIENT_DEVICE_INSTANCE` (389108), by device instance; the stack finds the
+address from its I-Am. `Recipient_List` is writable, so a workstation can
+replace the list at run time (B-ALSC's "event distribution by another device",
+L.5.1) - a real product should keep a written list across a restart.
+
+**Change the latching and reset rules** - `FollowReading()`, `OperationFits()`,
+`ApplyOperation()` and `OperationExpectedOf()` in `main.cpp` (the "logic internal
+to the device" cl. 12.15 leaves a local matter; B-LSC-CPP's TUTORIAL explains
+each). The stack checks only that a named object exists.
+
+**Change the schedule** - Saffron's weekly entry, `Schedule_Default` and its
+Calendar exception are set up in `main()` (B-AAC-CPP's canonical pattern). The
+engine runs on the Device's `Local_Date` / `Local_Time`, which this file serves
+from the device clock (`GetDeviceLocalTm`: host clock + the last
+TimeSynchronization's offset). Serve both, or the schedule never runs (stack
+#3958). Change the holidays in Calendar 1, not in the Schedule.
 
 ### Add a second analog input
 
@@ -107,29 +131,22 @@ the table above), this diff is the only thing that catches it.
 
 ## Life Safety Point/Zone at this Stack Pin (issue #2036)
 
-Up to stack `abd4cee1`, `BACnetStack_AddObject` - the only customer-facing way to
-create a Life Safety Point or Zone - left the stack without its internal
-life-safety object, and the stack answered `unknown-object` for almost every
-property **before this file's own `GetProperty*`/`SetProperty*` callbacks were
-reached**:
+At `6.x` @ `64b2cfac5` the stack falls through to this file's callbacks for every
+Life Safety Point/Zone property (stack #2187; up to `abd4cee1` it answered
+`unknown-object` before reaching them). The stack's own life-safety engine is
+still not exported (stack
+[#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036), open), so:
 
-```
-ReadProperty life-safety-point,1 . objectName        -> Error(read-property): object: unknown-object
-WriteProperty life-safety-point,1 . presentValue = 2 -> Error(write-property): object: unknown-object
-```
-
-At `6.x` @ `64b2cfac5` that is fixed (stack #2187: the stack falls through to the
-host callbacks). Every listed property of Amber and Azure reads, and the alarm
-demo works: `Present_Value` `2` -> `Event_State` life-safety-alarm, `3` -> fault,
-`0` -> normal, one event notification each (checked over the wire 2026-10-15).
-
-What stack issue
-[chipkin/cas-bacnet-stack#2036](https://github.com/chipkin/cas-bacnet-stack/issues/2036)
-(customer `AddLifeSafetyPointObject` / `AddLifeSafetyZoneObject` exports, still
-open) would still add: the stack's own life-safety engine (Mode / Accepted_Modes /
-Silenced / zone roll-up, which this example stands in for with its own state),
-and a way to set Life Safety Zone 1's `Zone_Members`. `Zone_Members` reads as an
-empty list today; the only setter is test-tool only. See TODO.md #1.
+- **Amber's and Azure's state is this file's** (`LifeSafetyObjectState`):
+  `Tracking_Value` follows the detector, `Present_Value` latches alarm until a
+  RESET, `Silenced` and `Operation_Expected` follow LifeSafetyOperation. Both are
+  read-only on the wire, as Table 12-18 says.
+- **`Reliability` comes from two places**: your callback serves cl. 13.2.2.2's
+  first stage (hardware health - always `no-fault-detected` here) and the stack's
+  `FAULT_LIFE_SAFETY` algorithm the second (`multi-state-fault` while
+  `Present_Value` is fault); the stack serves the combination. Do not compute the
+  algorithm's answer in the callback.
+- **`Zone_Members` reads empty** - the only setter is test-tool only (TODO.md #1).
 
 ## What each object type needs you to serve
 
@@ -142,11 +159,11 @@ It differs per type - this is the checklist, so you do not have to infer it:
 | Binary Input | `Present_Value` (Enumerated), `Object_Name` | `Polarity` |
 | Multi-State Input | `Present_Value` (Unsigned), `Object_Name` | `Number_Of_States`, `State_Text` |
 | Analog/Binary/Multi-State Output | `Object_Name`, `Units`/`Polarity`/`Number_Of_States`, `Relinquish_Default` | commandable - `Present_Value`/`Priority_Array`/`Current_Command_Priority` resolved by the stack from the priority array you populate |
-| Life Safety Point/Zone | `Object_Name`, `Present_Value`, `Tracking_Value`, `Reliability`, `Out_Of_Service`, `Mode`, `Silenced`, `Operation_Expected` | served by this file's callbacks; every listed property reads at `64b2cfac5` (see the Life Safety section above) |
-| Notification Class | `Object_Name` | `Priority`/`Ack_Required`/`Recipient_List` via `BACnetStack_AddNotificationClassObject`/`AddRecipientToNotificationClass`, not `GetProperty*` |
+| Life Safety Point/Zone | `Object_Name`, `Present_Value`, `Tracking_Value`, `Reliability` (first stage only), `Out_Of_Service`, `Mode`, `Silenced`, `Operation_Expected` | from `LifeSafetyObjectState` (see the Life Safety section above) |
+| Notification Class | `Object_Name` | `Priority`/`Ack_Required`/`Recipient_List` via `BACnetStack_AddNotificationClassObject`/`AddRecipientToNotificationClass`, not `GetProperty*`; `Recipient_List` made writable with `SetPropertyWritable` |
 | Event Log | `Object_Name` | everything else held by the stack's own Event Log engine (`BACnetStack_AddEventLogObject`) |
 | Schedule | `Object_Name`, `Reliability`, `Out_Of_Service` | `Present_Value`/`Effective_Period`/`Schedule_Default`/etc. held by the stack's Schedule engine |
-| Calendar | `Object_Name`, `Present_Value` | Added with plain `AddObject`, so `Date_List` is empty and `Present_Value` answers `false`; `BACnetStack_AddCalendarObject` (stack-held Date_List) is not used yet |
+| Calendar | `Object_Name` | stack-held (`BACnetStack_AddCalendarObject` + `AddCalendarDateEntry`): the stack keeps `Date_List` and derives `Present_Value` from `Local_Date` |
 
 ## Who serves what: the application or the stack?
 
@@ -167,10 +184,9 @@ picture:
 | `Object_Name` | **you** | `GetPropertyCharString` |
 | `Units` | **you** | `GetPropertyEnumerated` |
 
-Life Safety Point 1 "Amber" is served the same way at stack `64b2cfac5`: the
-callbacks for `Present_Value`, `Mode`, `Silenced` etc. are reached (up to
-`abd4cee1` the stack answered `unknown-object` before reaching them - see the
-Life Safety section above).
+Life Safety Point 1 "Amber" is served the same way, from its
+`LifeSafetyObjectState` - except `Event_State` and `Reliability`, which the
+stack computes from the two algorithms (see the Life Safety section above).
 
 Every object, not just these two, is in [docs/PICS.md](docs/PICS.md).
 
@@ -191,11 +207,11 @@ rather than against "it looked fine in the explorer":
 4. Confirm a write to a read-only input (e.g. Bronze) is rejected, and that a
    write to a commandable output (e.g. Chartreuse) at a priority is accepted,
    read back, and relinquishes correctly to `Relinquish_Default` on NULL.
-5. Fire and clear a life-safety alarm on Amber and Azure (`Present_Value` = `2`
-   then `0`): `Event_State` goes to `life-safety-alarm` and back to `normal`,
-   with a notification each time.
-6. Write Event Log 1 "Beige"'s `Enable` TRUE and confirm `Record_Count`
-   advances, then repeat step 5 and confirm it advances again.
+5. Run the Wire Tests (`tests/run_wire_tests.py`): they play the life-safety
+   scenario, the detector fault, the Event Log, the recipient-list rewrite and
+   the schedule, and the Failure Modes. If you changed a rule, change its test,
+   and check the test fails without your change (mutation-verify it -
+   `tests/README.md`).
 
 ### Keeping the PICS honest
 
@@ -224,7 +240,10 @@ and each one needs a justification. Anything required, not in `app` and not in
 | Symptom | Cause / fix |
 |---------|-------------|
 | On start-up the app prints a wall of red `Error:` lines but the device works | **Expected - this is not your bug.** Two benign sources, both from the stack's own debug logging: (1) the device receives its **own** broadcast I-Am and logs a decode cascade (*"Services is not supported service=[0]"* ... *"Failed to process the incoming NPDU"*) - any BACnet/IP device that listens for broadcasts hears itself; (2) a one-time *"UUID has not been set. A UUID must be set for the BACnetSC device to start."* - the stack starts a BACnet/SC datalink these IP-only examples never configure. On a healthy start-up roughly half the output is these lines. |
-| `LifeSafetyOperation() ... This feature was not compiled` at start-up | **Expected.** `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION` is not part of this build; the callback is registered (harmless) but the service is not advertised. See TODO.md #2. |
+| The example stops at start-up with `Error: Failed to enable the LifeSafetyOperation (AE-LS-B) ...` | The stack was built without `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION`. A SOURCE build gets it from `CMakeLists.txt`; a STATIC/DLL library must be rebuilt with it - README "Build". |
+| No alarm reaches the workstation | It has not announced itself: Crimson names it by device instance (389108). Read the Device's `Device_Address_Binding`; make the workstation send an I-Am - or write it into `Recipient_List` by address. |
+| Event Log 1's `Record_Count` stays 0 | `Enable` starts FALSE (stack #3301): write it TRUE. |
+| A RESET gets `Error(object, invalid-operation-in-this-state)` | By design: the detector still sees smoke, or nothing is latched. |
 | `ReadProperty`/`WriteProperty` to Amber or Azure answers `unknown-object` | You are on a stack older than `6.x` @ `64b2cfac5` (fixed by stack #2187). Move the Stack Pin forward; see [Life Safety Point/Zone at this Stack Pin](#life-safety-pointzone-at-this-stack-pin-issue-2036) above. |
 | CMake error: *"CAS BACnet Stack adapter not found under: ..."* | Submodules not initialized. Run `git submodule update --init --recursive` (or pass `-D CAS_STACK_DIR=...`). |
 | `CASBACnetStackDLL.h: No such file or directory` | Same - submodules not checked out. |

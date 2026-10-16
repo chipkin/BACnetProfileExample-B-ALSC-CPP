@@ -111,11 +111,12 @@ jobs:
           cat "${{ matrix.metrics }}"
           { echo '### metrics (${{ matrix.os }})'; echo '```json'; cat "${{ matrix.metrics }}"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      # The Wire Test: a Python client (the Peer) discovers the advanced life safety controller the way a BACnet
-      # client does - Who-Is, Object_List, every object's Property_List - and reads every
-      # listed property; any Error, Reject or Abort fails it (tests/README.md). Python 3
-      # standard library only.
-      - name: Wire Tests (discovery - every listed property reads)
+      # The Wire Tests: a Python operator workstation (the Peer, Device 389108) discovers the advanced
+      # life safety controller, receives its life-safety alarms from the simulated smoke detector,
+      # silences, acknowledges and resets them, reads them back from the Event Log, redirects the
+      # recipient list, and drives the schedule with TimeSynchronization; plus the Failure Modes.
+      # tests/README.md says what each check proves. Python 3 standard library only.
+      - name: Wire Tests (discovery, life safety, detector fault, Event Log, distribution, schedule)
         if: runner.os == 'Linux'
         shell: bash
         run: python3 tests/run_wire_tests.py --exe "${{ matrix.exe }}"

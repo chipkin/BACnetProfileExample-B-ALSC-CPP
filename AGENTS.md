@@ -6,26 +6,30 @@ Guidance for AI coding agents working in this repository. See
 
 ## What this project is
 
-A **tutorial** C++ example that implements **as much of** the BACnet **B-ALSC
-(Advanced Life Safety Controller)** profile as the standard CAS BACnet Stack's
-customer-facing API supports. It is one of a series - one git repo per BACnet
-profile - seeded from B-LSC (Life Safety Controller), and adds **F-EVENTLOG**
-(Event Log 1 "Beige", ReadRange) and **F-SCHED-I** (Schedule 1 "Saffron" +
-Calendar 1 "Cream", copied from B-AAC's canonical pattern) on top of B-LSC's
-**intrinsic life-safety alarming** (AE-LS-B / AE-ACK-B / AE-INFO-B),
-**LifeSafetyOperation** (silence/reset), and **DS-COV-B**. What B-ALSC requires
-but this example cannot yet do - LifeSafetyOperation (not compiled into the
-default stack build), Zone's `Zone_Members` (issue #2036, open) - is
-documented in [TODO.md](TODO.md) - keep that file honest and current. At stack
-`64b2cfac5` Life Safety Point/Zone serve every listed property and their alarms
-work (the `unknown-object` defect of earlier pins is fixed by stack #2187). The top priority is that the code reads like a tutorial a customer
-can learn from and copy-paste. Favour clarity over cleverness.
+A **tutorial** C++ example of the BACnet **B-ALSC (Advanced Life Safety
+Controller)** profile, and it is **Profile-functional** (the series bar). It is
+B-LSC-CPP's example (a SIMULATED smoke detector drives Life Safety Point 1
+"Amber" and its zone "Azure" to a latched life-safety alarm; confirmed
+notifications go to an operator workstation; LifeSafetyOperation /
+AcknowledgeAlarm silence, acknowledge and reset it) plus B-ALSC's additions:
+Notification Class 1's `Recipient_List` is writable (event distribution by
+another device), Event Log 1 "Beige" logs every alarm (ReadRange), and Schedule 1
+"Saffron" + stack-held Calendar 1 "Cream" (B-AAC's canonical pattern) run on a
+device clock TimeSynchronization sets. Wire Tests against Python Peers prove each,
+with the Failure Modes. What the customer interface still cannot do (Zone's
+`Zone_Members`, stack #2036; Event Log enabled at start-up, stack #3301) is a
+`[KNOWN GAP]` in [TODO.md](TODO.md) and the Wire Tests - keep both honest and
+current. The top priority is that the code reads like a tutorial a customer can
+learn from and copy-paste. Favour clarity over cleverness.
 
 ## Layout
 
 This repository is self-contained:
 
-- `main.cpp` - the example device.
+- `main.cpp` - the example device: B-LSC-CPP's main.cpp plus the B-ALSC
+  additions (keep the two diffable). Section 1b is the smoke-detector SIMULATION.
+- `simulation/` - the Wire Tests' loopback-only test control channel (SIMULATION,
+  off unless `BALSC_SIMULATION_CONTROL_PORT` is set). Never a CLI option.
 - `common/` - the shared helper (vendored).
 - `README.md` - what this example is. Keep it short and about THIS example only.
 - `TUTORIAL.md` - how to extend and review the example, including the Life
@@ -39,6 +43,9 @@ This repository is self-contained:
   branch.
 - `TODO.md` - what B-ALSC requires but the stack's customer surface cannot yet
   do, and why. Keep it honest and current.
+- `tests/` + `wiretest/` - the Wire Tests and the series' shared harness
+  (vendored; frozen at 0.6.0 - generic additions go in `tests/wiretest_extras.py`).
+  Every check must fail when its feature is removed: mutation-verify any change.
 - `submodules/cas-bacnet-stack/` - the **CAS BACnet Stack** as a git submodule
   (private; compiled from source). After cloning, run
   `git submodule update --init --recursive`.
@@ -73,8 +80,9 @@ commands above.
 ```
 
 Interactive keys while running: `h` help, `q` quit, up/down nudge Analog Input 1
-(also feeds its COV subscribers), `s` advance Schedule 1 ("Saffron") with a
-Weekly_Schedule transition for right now.
+(also feeds its COV subscribers), `s` add a Weekly_Schedule transition to Schedule 1
+("Saffron") for right now (device clock). The detector has no key: the Wire Tests
+use the test control channel (README "Interactive commands").
 
 ## Conventions
 
@@ -101,9 +109,20 @@ Weekly_Schedule transition for right now.
   so the stack re-evaluates and fires the notification - the doc comment on that
   function is not decorative: "a host that never calls it will never generate an
   event notification."
-- LifeSafetyOperation: register `BACnetStack_RegisterCallbackLifeSafetyOperation`;
-  `useObjectIdentifier == false` means "apply to every life-safety object in this
-  device" (cl. 13.8.1.4).
+- LifeSafetyOperation: needs `STACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION` (the
+  stack's documented public toggle, defined in `CMakeLists.txt` for SOURCE builds;
+  a STATIC/DLL library must be built with it), plus
+  `BACnetStack_RegisterCallbackLifeSafetyOperation` and the service enabled. The
+  stack checks the named object exists; the callback decides whether the operation
+  fits the object's current state (`OperationFits()`), refusing with
+  `INVALID_OPERATION_IN_THIS_STATE`. `useObjectIdentifier == false` means "all
+  applicable objects" (cl. 13.13.1.1.4).
+- Reliability on Amber/Azure: the callback serves only cl. 13.2.2.2's first stage
+  (no-fault-detected); the stack's FAULT_LIFE_SAFETY algorithm supplies
+  `multi-state-fault` and serves the combination. Do not compute it in the callback.
+- The device clock: `Local_Date` / `Local_Time` come from `GetDeviceLocalTm` (host
+  clock + the last TimeSynchronization's offset); the Schedule and Calendar
+  engines run on them, and must have them served (stack #3958).
 - DS-COV-B: `BACnetStack_SetPropertySubscribable` on the property, plus
   `SetCOVSettings`/`SetMaxActiveCOVSubscriptions`; `BACnetStack_UpdateValue` also
   feeds COV subscribers - one call does both jobs, there is no separate "notify
@@ -129,46 +148,23 @@ Weekly_Schedule transition for right now.
 
 ## How to verify a change
 
-There are no unit tests; verification is behavioural:
+The Wire Tests are the verification (README "Wire Tests", `tests/README.md`):
 
-1. Build, then run one instance on a clear UDP port.
-2. With a BACnet client (e.g. the CAS BACnet Explorer, or `bacpypes3`/`BAC0`),
-   send **Who-Is** and confirm **I-Am** from the device instance.
-3. **ReadProperty** every required property of every object and confirm the
-   values; confirm `Protocol_Revision` is 30 and `Object_List` lists all objects.
-   `python3 tests/run_wire_tests.py --exe build/BACnetExampleBALSC` automates this.
-4. **WriteProperty** a commandable output's `Present_Value` at a priority, re-read
-   it (and its `Priority_Array`), then write NULL to relinquish and confirm it
-   falls back to `Relinquish_Default`. Confirm a write to a read-only input is
-   rejected.
-5. **Life-safety alarming**: WriteProperty Life Safety Point 1 "Amber"
-   `Present_Value` to `2` (alarm); confirm `Event_State` goes to
-   `life-safety-alarm` and a `CHANGE_OF_LIFE_SAFETY` EventNotification is sent;
-   write `0` and confirm it returns to normal. Repeat with `3` (fault) and the
-   fault algorithm. AcknowledgeAlarm and GetEventInformation both respond.
-6. **LifeSafetyOperation**: send `silence`; confirm `Silenced` reflects it. Latch
-   an alarm, send `reset-alarm`, confirm `Present_Value` returns to quiet.
-7. **DS-COV-B**: SubscribeCOV to Bronze's or Amber's `Present_Value`; change it
-   (up/down key, or a WriteProperty) and confirm a COV notification arrives.
-8. **Device management**: ReinitializeDevice COLDSTART SimpleACKs, then the
-   process actually restarts and re-announces with an I-Am; DCC
-   `disable-initiation`/`enable` SimpleACK; TimeSynchronization accepted.
-9. **F-EVENTLOG**: ReadProperty Beige's `Object_Name`/`Buffer_Size`/
-   `Record_Count`/`Total_Record_Count`; WriteProperty `Enable` and read it back;
-   `ReadRange` (RangeByPosition) of `Log_Buffer`. Toggling `Enable` itself
-   produces a captured log-status record (`Record_Count` advances) with no
-   application code involved. With `Enable` TRUE, step 5's alarm transitions are
-   captured too (`Record_Count` +2 per transition at `64b2cfac5`).
-10. **F-SCHED-I**: press `s`, then ReadProperty Chartreuse's `Present_Value` a
-    moment later and confirm it moved to the demo value at priority 8;
-    `Priority_For_Writing`/`Schedule_Default` on Saffron read back correctly.
-11. If you changed the objects or their properties, regenerate `docs/PICS.md`
-    (`python tools/gen-objects-properties.py BACnetProfileExample-B-ALSC-CPP`
-    from the series root) and confirm no *new* row comes out flagged with ⚠ -
-    Amber's and Azure's rows are marked `accepted` with a justification, not
-    ⚠, and should stay that way; a ⚠ on any other object is a real defect.
+```bash
+python3 tests/run_wire_tests.py --exe build/BACnetExampleBALSC
+```
 
-Verification is manual (no in-repo test suite ships).
+They cover discovery (every listed property reads), the life-safety scenario and
+its Failure Modes, the detector fault, the Event Log (ReadRange), the
+`Recipient_List` rewrite, and the schedule under TimeSynchronization. Not covered
+(do these by hand when you touch them): COV notifications, a silent recipient's
+retransmissions, UNSILENCE, DCC, ReinitializeDevice and the `s` key.
+
+When you change behaviour, change its test and **mutation-verify** it: remove or
+break the feature, rebuild (check the binary's mtime changed), confirm the check
+fails, restore. If you changed the objects or their properties, regenerate
+`docs/PICS.md` (`python tools/gen-objects-properties.py BACnetProfileExample-B-ALSC-CPP`
+from the series root) and confirm no row comes out flagged with ⚠.
 
 ## Releasing
 

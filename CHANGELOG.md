@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - unreleased
+
+Profile-functional rework (series bar, `docs/GLOSSARY.md`; brief
+`docs/phase2-rework-brief.md` in the example-series folder), on top of
+BACnetProfileExample-B-LSC-CPP 1.2.0's. Stack Pin unchanged (`6.x` @ `64b2cfac5`),
+`common/` 3.4.0 and `wiretest/` 0.6.0 unchanged.
+
+Profile Function, 135-2024 L.5.1 (verbatim): "A B-ALSC device performs life safety alarm
+detection and control. It supports life safety objects and limited modification of its
+alarm and event reporting, including event distribution by another device. Also, the
+device supports scheduling of internal values and event logging."
+
+### Added
+
+- **Everything B-LSC-CPP 1.2.0 added**, merged into this file (a 3-way merge of B-LSC's
+  change, so the two `main.cpp` files still diff to the B-ALSC additions): the simulated
+  smoke detector and loopback test control channel (`BALSC_SIMULATION_CONTROL_PORT`),
+  latching `Present_Value`, LifeSafetyOperation compiled in and executed with the
+  state rules (reset refused while smoke is present / nothing latched / RESET_FAULT),
+  confirmed notifications to Device 389108 by device instance, `Number_Of_APDU_Retries`
+  3, Reliability served as cl. 13.2.2.2's first stage only, the AcknowledgeAlarm
+  callback leaving 13.5.2 to the stack.
+- **Notification distribution by another device** (L.5.1): Crimson's `Recipient_List` is
+  writable; `tests/distribution_test.py` redirects it.
+- **Wire Tests**: `life_safety_test.py` (37 + 1 known gap) and `fault_test.py` (13), as
+  B-LSC's; `event_log_test.py` (17 + 1 known gap), `distribution_test.py` (7),
+  `schedule_test.py` (5, B-AAC-CPP's); `alsc_setup.py`; `wiretest_extras.py` (B-LSC's
+  generic helpers plus B-AEC-CPP's ReadRange / Event Log record decoders, verbatim).
+
+### Changed
+
+- **Calendar 1 "Cream" is stack-held** (`BACnetStack_AddCalendarObject`, Date_List =
+  December 25 every year) and Saffron's exception references it, replacing the empty
+  plain-`AddObject` Calendar and the inline 2026-12-25 exception (B-AAC-CPP's canonical
+  pattern).
+- **The device clock**: `Local_Date` / `Local_Time` are the host clock plus the last
+  TimeSynchronization's offset (`GetDeviceLocalTm`, B-AAC-CPP's), so a time sync moves
+  Saffron and Cream; before, a sync only overwrote a snapshot. The `s` key uses the
+  device clock too.
+- **Event Log 1 "Beige"** is now proved to log each alarm exactly once, even with the
+  recipient unreachable (the 1.1.0 check saw 2 records per transition: the broadcast
+  recipient, stack #3957). `Enable` still starts FALSE (stack #3301, `[KNOWN GAP]`).
+- `Present_Value` of Amber and Azure read-only again (Table 12-18).
+- README (scenario, Failure Modes, what is Simulation, Build note, Wire Tests), TUTORIAL,
+  PICS (regenerated; Number_Of_APDU_Retries, Reliability, Recipient_List, Calendar rows),
+  AGENTS, TODO (rewritten), tests/README, release.yml step name. APP_VERSION 1.1.0 ->
+  1.2.0.
+
+### Verified (2026-10-16)
+
+- Windows 11 STATIC (NMake, VS 18; stack `ReleaseLib|x64` rebuilt with
+  `CL=-DSTACK_OPTION_DM_LSO_LIFE_SAFETY_OPERATION`): 0 warnings; Wire Tests 100/100 x3
+  (21 + 37 + 13 + 17 + 7 + 5), 2 known gaps. Runs 2 and 3 each show one visible `[RETRY]`
+  (a request with no answer, sent again - the host was busy with other sessions' builds).
+- Linux WSL Ubuntu 22.04 SOURCE: Wire Tests 100/100 x3, 2 known gaps, no `[RETRY]`.
+- 19 mutations of `main.cpp` (Linux; B-LSC's 13 plus 6 for the B-ALSC additions), each
+  rebuilt (relink checked) and run; every one fails at least one check - see the commit message.
+
 ## [1.1.0] - unreleased
 
 ### Changed
