@@ -6,8 +6,8 @@ its Failure Modes, and proves both with Wire Tests (`tests/`). B-ALSC is B-LSC p
 Event Log, internal scheduling and a configurable recipient list; this example is
 `BACnetProfileExample-B-LSC-CPP` plus those, and items 1-2 are the same as B-LSC's. The
 items below are what it still does not do, why, and what it would take. Re-check every
-entry whenever the Stack Pin moves. Checked at stack `6.x` @ `64b2cfac5` (6.0.23),
-2026-10-16.
+entry whenever the Stack Pin moves. Checked at stack `6.x` @ `69b6249f` (6.0.23),
+2026-10-26.
 
 ## 1. Life Safety Zone 1 (Azure) Zone_Members cannot be set [KNOWN GAP]
 
@@ -53,8 +53,7 @@ is logged exactly once.
 
 ## 4. Not Wire-Tested
 
-- **COV** (DS-COV-B): Amber's and Bronze's `Present_Value` are subscribable, but no Wire
-  Test subscribes.
+- **COV notifications** (DS-COV-B): Amber's and Bronze's `Present_Value` are subscribable and  the Wire Tests subscribe (8-hour lifetime), but none waits for the notification itself.
 - **A silent recipient**: `Number_Of_APDU_Retries` is 3 and checked, but no test counts
   retransmissions (B-AAC-CPP's `silent_recipient_test.py` does).
 - **UNSILENCE**, the audible/visual-only operations, and the `s` key's demo schedule entry.
@@ -71,3 +70,11 @@ is logged exactly once.
   exception references it; TimeSynchronization sets the device clock the Schedule runs on
   (B-AAC-CPP's canonical pattern), and a Wire Test drives it headless (no `s` key).
 - AcknowledgeAlarm and GetEventInformation are exercised end to end.
+
+## 5. Other limits at 1.3.0
+
+- **Nothing the network writes is kept across a restart.** The example holds its state in
+  memory only: Notification Class `Recipient_List`, Enable, the Schedule and Calendar
+  settings and `Out_Of_Service` all return to their start-up values.
+- **Backup and restore are not supported**: ReinitializeDevice START_BACKUP and
+  START_RESTORE are answered with an Error (OPTIONAL_FUNCTIONALITY_NOT_SUPPORTED).

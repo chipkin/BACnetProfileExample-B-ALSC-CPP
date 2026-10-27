@@ -131,7 +131,7 @@ the table above), this diff is the only thing that catches it.
 
 ## Life Safety Point/Zone at this Stack Pin (issue #2036)
 
-At `6.x` @ `64b2cfac5` the stack falls through to this file's callbacks for every
+At `6.x` @ `69b6249f` (as from `64b2cfac5`) the stack falls through to this file's callbacks for every
 Life Safety Point/Zone property (stack #2187; up to `abd4cee1` it answered
 `unknown-object` before reaching them). The stack's own life-safety engine is
 still not exported (stack
@@ -204,7 +204,7 @@ rather than against "it looked fine in the explorer":
    listed property and fails on any that does not return a value.
 3. Diff a new object of a type against the existing one of that type. Anything
    that differs and shouldn't is a callback that matched on instance.
-4. Confirm a write to a read-only input (e.g. Bronze) is rejected, and that a
+4. Confirm a write to a read-only input (e.g. Emerald, or Bronze while it is in service) is rejected, and that a
    write to a commandable output (e.g. Chartreuse) at a priority is accepted,
    read back, and relinquishes correctly to `Relinquish_Default` on NULL.
 5. Run the Wire Tests (`tests/run_wire_tests.py`): they play the life-safety
@@ -217,7 +217,7 @@ rather than against "it looked fine in the explorer":
 
 `docs/PICS.md` is partly generated. `docs/objects.json` describes each object and
 who serves which property; the series tool regenerates the object tables from it
-plus the stack's own `docs/property-profile-reference.md` at the pinned commit:
+plus the CAS BACnet Stack's property profiles (a reference the series tool vendors):
 
 ```bash
 python tools/gen-objects-properties.py BACnetProfileExample-B-ALSC-CPP            # rewrite

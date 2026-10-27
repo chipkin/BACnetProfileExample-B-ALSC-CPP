@@ -22,17 +22,17 @@
         "System_Status",
         "Max_APDU_Length_Accepted",
         "Segmentation_Supported",
-        "APDU_Timeout",
-        "Database_Revision"
+        "APDU_Timeout"
       ],
-      "note": "the device itself; the instance is configurable with --deviceID. The stack rows are device-wide facts only the stack knows - the protocol version and revision it implements, the services and object types it was configured with, the live object list and address-binding table. Number_Of_APDU_Retries is served by the app as 3 (12.11.29 suggested default; the stack default of 0 would never retransmit a ConfirmedEventNotification). The accepted rows are the stack's configured defaults for APDU limits, segmentation, system status and database revision; an application that answered them from its own constants could contradict the stack, so this example does not",
+      "note": "the device itself; the instance is configurable with --deviceID and the Object_Name with --deviceName (both at start-up; the heading shows the defaults). The stack rows are device-wide facts only the stack knows - the protocol version and revision it implements, the services and object types it was configured with, the live object list and address-binding table, and Database_Revision, which the stack starts at 0 and increments for each object added at start-up: it reads 14 (the Device and the thirteen objects main.cpp adds) and stays 14, because nothing creates, deletes or renames an object afterwards (the detector, LifeSafetyOperation, commanding an output, writing Mode, Recipient_List or the Event Log Enable, and a TimeSynchronization change values, not the object database). Number_Of_APDU_Retries is served by the app as 3 (12.11.29 suggested default; the stack default of 0 would never retransmit a ConfirmedEventNotification). The accepted rows are the stack's configured defaults for APDU limits, segmentation and system status; an application that answered them from its own constants could contradict the stack, so this example does not",
       "stack": [
         "Object_List",
         "Protocol_Version",
         "Protocol_Revision",
         "Protocol_Services_Supported",
         "Protocol_Object_Types_Supported",
-        "Device_Address_Binding"
+        "Device_Address_Binding",
+        "Database_Revision"
       ]
     },
     {
@@ -43,14 +43,20 @@
         "Present_Value",
         "Object_Name",
         "Units",
-        "Out_Of_Service"
+        "Out_Of_Service",
+        "COV_Increment"
       ],
-      "enabled": [],
-      "writable": [],
+      "enabled": [
+        "COV_Increment"
+      ],
+      "writable": [
+        "Out_Of_Service",
+        "Present_Value"
+      ],
       "accepted": [
         "Event_State"
       ],
-      "note": "REAL, degrees Celsius; starts at 21.5. Present_Value is DS-COV-B subscribable (BACnetStack_SetPropertySubscribable); the up/down key feeds subscribers via BACnetStack_UpdateValue"
+      "note": "REAL, degrees Celsius; starts at 21.5. Present_Value is DS-COV-B subscribable (BACnetStack_SetPropertySubscribable); the up/down key feeds subscribers via BACnetStack_UpdateValue. COV_Increment 1.0 (required: the object supports COV reporting, cl. 12.2 footnote 2). Out_Of_Service is writable; Present_Value is writable only while it is TRUE (cl. 12.2.4), refused with WRITE_ACCESS_DENIED otherwise"
     },
     {
       "type": "Binary Input",
@@ -167,7 +173,7 @@
         "Accepted_Modes",
         "Event_State"
       ],
-      "note": "The smoke detector. F-LIFESAFETY / F-ALARM-LS (canonical: B-LSC). Tracking_Value follows the SIMULATED detector (main.cpp section 1b: quiet(0) / alarm(2) / fault(3)); Present_Value LATCHES alarm until a LifeSafetyOperation RESET, which is refused (OBJECT / INVALID_OPERATION_IN_THIS_STATE) while the detector still sees smoke or when nothing is latched; a fault follows the detector and is not latched. Present_Value and Tracking_Value are read-only (Table 12-18). Silenced and Operation_Expected (SILENCE while sounding, RESET once silenced) follow LifeSafetyOperation. Reliability is served by the stack: this example's callback supplies the first stage (cl. 13.2.2.2, hardware - always no-fault-detected here) and the stack's FAULT_LIFE_SAFETY algorithm the second (MULTI_STATE_FAULT while Present_Value is fault). Mode is required-writable and accepted unconditionally (no customer-facing Accepted_Modes setter exists - see the file header); Accepted_Modes is therefore accepted at the stack's generic default. Event_State is NOT actually a stack default here - it is genuinely computed by the CHANGE_OF_LIFE_SAFETY and FAULT_LIFE_SAFETY algorithms this example arms; it is marked accepted only because property-profile-reference.md's generic table does not know an algorithm was armed (same convention as B-AAC's Diamond). Present_Value is also DS-COV-B subscribable",
+      "note": "The smoke detector. F-LIFESAFETY / F-ALARM-LS (canonical: B-LSC). Tracking_Value follows the SIMULATED detector (main.cpp section 1b: quiet(0) / alarm(2) / fault(3)); Present_Value LATCHES alarm until a LifeSafetyOperation RESET, which is refused (OBJECT / INVALID_OPERATION_IN_THIS_STATE) while the detector still sees smoke or when nothing is latched; a fault follows the detector and is not latched. Present_Value and Tracking_Value are read-only (Table 12-18). Silenced and Operation_Expected (SILENCE while sounding, RESET once silenced) follow LifeSafetyOperation. Reliability is served by the stack: this example's callback supplies the first stage (cl. 13.2.2.2, hardware - always no-fault-detected here) and the stack's FAULT_LIFE_SAFETY algorithm the second (MULTI_STATE_FAULT while Present_Value is fault). Mode is required-writable and accepted unconditionally (no customer-facing Accepted_Modes setter exists - see the file header); Accepted_Modes is therefore accepted at the stack's generic default. Event_State is NOT actually a stack default here - it is genuinely computed by the CHANGE_OF_LIFE_SAFETY and FAULT_LIFE_SAFETY algorithms this example arms; it is marked accepted only because the stack's generic property profile does not know an algorithm was armed (same convention as B-AAC's Diamond). Present_Value is also DS-COV-B subscribable",
       "stack": [
         "Reliability"
       ]
@@ -194,7 +200,7 @@
         "Zone_Members",
         "Event_State"
       ],
-      "note": "The smoke detector's zone. F-LIFESAFETY / F-ALARM-LS. Rolls up Life Safety Point 1 (Amber): takes its detector reading, latches alarm the same way, and a LifeSafetyOperation addressed to the zone also operates Amber. Event_State is genuinely computed (the same two algorithms are armed on Azure), marked accepted for the same generator-limitation reason. Reliability as Amber's. Zone_Members (cl. 12.16.26, required, BACnetLIST of BACnetDeviceObjectReference) should list Amber but reads as an empty list at 64b2cfac5: the stack serves it, but only the test-tool BACnetStackTestTool_SetLifeSafetyZoneMembers can fill it, and the series does not use the test-tool interface. [KNOWN GAP] in tests/life_safety_test.py; see TODO.md and stack #2036 (open)",
+      "note": "The smoke detector's zone. F-LIFESAFETY / F-ALARM-LS. Rolls up Life Safety Point 1 (Amber): takes its detector reading, latches alarm the same way, and a LifeSafetyOperation addressed to the zone also operates Amber. Event_State is genuinely computed (the same two algorithms are armed on Azure), marked accepted for the same generator-limitation reason. Reliability as Amber's. Zone_Members (cl. 12.16.26, required, BACnetLIST of BACnetDeviceObjectReference) should list Amber but reads as an empty list at 69b6249f: the stack serves it, but only the test-tool BACnetStackTestTool_SetLifeSafetyZoneMembers can fill it, and the series does not use the test-tool interface. [KNOWN GAP] in tests/life_safety_test.py; see TODO.md and stack #2036 (open)",
       "stack": [
         "Reliability"
       ]
@@ -215,7 +221,7 @@
         "Ack_Required",
         "Recipient_List"
       ],
-      "note": "Priority, Ack_Required and Recipient_List are NOT stack DEFAULTS - they are genuinely populated, by BACnetStack_AddNotificationClassObject (Priority, Ack_Required) and BACnetStack_AddRecipientToNotificationClass (Recipient_List) at start-up. They are marked accepted only because property-profile-reference.md's generic per-type table does not know about this object-specific host-configuration API and so cannot credit them as stack-served. Routes Amber's and Azure's CHANGE_OF_LIFE_SAFETY / fault notifications, CONFIRMED; at start-up to one recipient named by DEVICE instance, 389108, the operator workstation (the stack resolves its address from its I-Am). Recipient_List is registered WRITABLE (BACnetStack_SetPropertyWritable): \"limited modification of its alarm and event reporting, including event distribution by another device\" (L.5.1); the stack decodes and stores a written list itself. tests/distribution_test.py redirects it"
+      "note": "Priority, Ack_Required and Recipient_List are NOT stack DEFAULTS - they are genuinely populated, by BACnetStack_AddNotificationClassObject (Priority, Ack_Required) and BACnetStack_AddRecipientToNotificationClass (Recipient_List) at start-up. They are marked accepted only because the stack's generic per-type property profile does not know about this object-specific host-configuration API and so cannot credit them as stack-served. Routes Amber's and Azure's CHANGE_OF_LIFE_SAFETY / fault notifications, CONFIRMED; at start-up to one recipient named by DEVICE instance, 389108, the operator workstation (the stack resolves its address from its I-Am). Recipient_List is registered WRITABLE (BACnetStack_SetPropertyWritable): \"limited modification of its alarm and event reporting, including event distribution by another device\" (L.5.1); the stack decodes and stores a written list itself. tests/distribution_test.py redirects it"
     },
     {
       "type": "Event Log",
@@ -232,6 +238,7 @@
         "Buffer_Size",
         "Record_Count",
         "Total_Record_Count",
+        "Stop_When_Full",
         "Log_Buffer",
         "Status_Flags",
         "Object_Identifier",
@@ -240,7 +247,7 @@
         "Event_State",
         "Enable"
       ],
-      "note": "F-EVENTLOG (canonical: this repository). AE-EL-I-B. Enable/Buffer_Size/Record_Count/Total_Record_Count/Log_Buffer/Status_Flags/Object_Identifier/Object_Type/Property_List are NOT stack defaults in the generic sense - they are genuinely held and served by the stack's own Event Log engine (BACnetStack_AddEventLogObject), answered from stack storage BEFORE this file's Get*/Set* callbacks are ever consulted; marked accepted only because property-profile-reference.md's generic table does not know about this object-specific engine. The stack captures every event notification the device itself generates - each life-safety alarm of Amber and Azure is logged once, even when its recipient is unreachable (tests/event_log_test.py reads them back with ReadRange). Enable starts FALSE and the customer interface cannot set it at creation (stack #3301, [KNOWN GAP]); it is writable, so an operator turns logging on. A ReadProperty of Log_Buffer is refused with PROPERTY / READ_ACCESS_DENIED (cl. 12.27.13). BACnetStack_InsertEventLogRecord is test-tool only; this example never fakes a record. Event_State is accepted at the stack's generic default (normal) - no intrinsic reporting is armed on Beige itself"
+      "note": "F-EVENTLOG (canonical: this repository). AE-EL-I-B. Enable/Buffer_Size/Record_Count/Total_Record_Count/Stop_When_Full/Log_Buffer/Status_Flags/Object_Identifier/Object_Type/Property_List are NOT stack defaults in the generic sense - they are genuinely held and served by the stack's own Event Log engine (BACnetStack_AddEventLogObject), answered from stack storage BEFORE this file's Get*/Set* callbacks are ever consulted; marked accepted only because the stack's generic property profile does not know about this object-specific engine (Stop_When_Full reads FALSE: the buffer wraps). The stack captures every event notification the device itself generates - each life-safety alarm of Amber and Azure is logged once, even when its recipient is unreachable (tests/event_log_test.py reads them back with ReadRange). Enable starts FALSE and the customer interface cannot set it at creation (stack #3301, [KNOWN GAP]); it is writable, so an operator turns logging on. A ReadProperty of Log_Buffer is refused with PROPERTY / READ_ACCESS_DENIED (cl. 12.27.13). BACnetStack_InsertEventLogRecord is test-tool only; this example never fakes a record. Event_State is accepted at the stack's generic default (normal) - no intrinsic reporting is armed on Beige itself"
     },
     {
       "type": "Schedule",
@@ -258,7 +265,7 @@
         "Effective_Period",
         "Priority_For_Writing"
       ],
-      "note": "SCHED-I-B (B-AAC-CPP's canonical Saffron). Present_Value, Effective_Period, Schedule_Default, List_Of_Object_Property_References, Priority_For_Writing and Status_Flags are NOT stack DEFAULTS - they are genuinely held and served by the stack's Schedule engine (BACnetStack_AddScheduleObject plus the BACnetStack_SetSchedule*/AddSchedule* configuration calls in main.cpp); it writes Analog Output 1 (Chartreuse) Present_Value at priority 8. Present_Value, Effective_Period and Priority_For_Writing are marked accepted only because property-profile-reference.md's generic table does not know about the Schedule engine's own host-configuration API. One weekly transition (Monday 08:00) and one exception that references Calendar 1 Cream are seeded at start-up; the 's' key (common/ 2.1.0's DemoAdvance) adds a transition for right now so the change can be observed without waiting for the wall clock. The engine evaluates against the Device's Local_Date / Local_Time, which the app serves. A TimeSynchronization moves that device clock (tests/schedule_test.py)"
+      "note": "SCHED-I-B (B-AAC-CPP's canonical Saffron). Present_Value, Effective_Period, Schedule_Default, List_Of_Object_Property_References, Priority_For_Writing and Status_Flags are NOT stack DEFAULTS - they are genuinely held and served by the stack's Schedule engine (BACnetStack_AddScheduleObject plus the BACnetStack_SetSchedule*/AddSchedule* configuration calls in main.cpp); it writes Analog Output 1 (Chartreuse) Present_Value at priority 8. Present_Value, Effective_Period and Priority_For_Writing are marked accepted only because the stack's generic property profile does not know about the Schedule engine's own host-configuration API. One weekly transition (Monday 08:00) and one exception that references Calendar 1 Cream are seeded at start-up; the 's' key (common/ 2.1.0's DemoAdvance) adds a transition for right now so the change can be observed without waiting for the wall clock. The engine evaluates against the Device's Local_Date / Local_Time, which the app serves. A TimeSynchronization moves that device clock (tests/schedule_test.py)"
     },
     {
       "type": "Calendar",

@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """B-ALSC Wire Test - the workstation sets the controller's clock, and the local schedule follows it.
 
-    python3 tests/schedule_test.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/schedule_test.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 135-2024 L.5.1: "Ability to schedule actions in the local device for binary, analog, and
 enumerated values, based on date and time" (SCHED-I-B) and "Ability to synchronize its internal

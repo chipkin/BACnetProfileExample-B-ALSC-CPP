@@ -22,7 +22,7 @@ python3 tests/run_wire_tests.py --exe build/BACnetExampleBALSC
 
 On Windows, `--exe build\Release\BACnetExampleBALSC.exe`. It ends with
 `ALL WIRE TESTS PASSED` (exit 0) or the scripts that failed. `--port` (default
-47821) is the UDP port the test starts the example on; the test control channel
+47836) is the UDP port the test starts the example on; the test control channel
 uses `--port` + 1. It takes about a minute. CI (`.github/workflows/release.yml`)
 runs it on Linux after the smoke test.
 
@@ -114,6 +114,30 @@ listed; Zone_Members `[KNOWN GAP]`. And a detector fault -> Reliability
    **`FD_Subscription_Lifetime` (419)** are each listed and read as a value.
 5. Event Log 1's **`Log_Buffer` (131)** is the one listed property ReadProperty
    must refuse (cl. 12.27.13), with PROPERTY / READ_ACCESS_DENIED (cl. 15.5.1.3.1).
+6. **Device `Database_Revision`** reads 14.
+7. **SubscribeCOV** on Analog Input 1 with an 8-hour lifetime (28800 s) gets a
+   SimpleACK (the BTL Test Plan requires 8-hour lifetimes for DS-COV-B, 135.1
+   9.10.1.10); one second more gets an Error; the cancellation (no lifetime) gets
+   a SimpleACK.
+
+## `configuration_test.py` - the Device's identity is configurable at start-up
+
+Cl. 12.1.1.3 and 12.1.1.4 require the Device's Object_Identifier and Object_Name
+to be configurable (Object_Name must be unique across the internetwork).
+
+1. **No options** (the control): Device 389008 answers Who-Is, and its
+   Object_Name is the default `Chipkin Example B-ALSC`.
+2. **`--deviceID 389908 --deviceName "Chipkin Example B-ALSC Unit 2"`**: Who-Is,
+   ReadProperty, the ready line and a Who-Has by name all see the configured
+   instance and name; 389008 answers OBJECT / UNKNOWN_OBJECT. A WriteProperty of
+   the Device's Object_Name is refused and the name is unchanged: it changes only
+   at start-up.
+3. **Limits**: an empty or a 256-byte `--deviceName` prints a warning and keeps
+   the default; a 255-byte one is served whole.
+4. **`--help`** lists `--port`, `--deviceID`, `--deviceName` and `--xml`, and not
+   `--dcc-password` (the DeviceCommunicationControl / ReinitializeDevice password
+   is `DCC_PASSWORD` in `main.cpp`); with `--xml` the console shows each frame as
+   an XML block.
 
 ## Results
 

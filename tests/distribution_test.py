@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """B-ALSC Wire Test - another device redirects where the life-safety alarms go.
 
-    python3 tests/distribution_test.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/distribution_test.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 135-2024 L.5.1: a B-ALSC "supports ... limited modification of its alarm and event reporting,
 including event distribution by another device" - "Adjustment of alarm / event parameters

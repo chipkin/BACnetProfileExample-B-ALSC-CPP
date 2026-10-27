@@ -92,7 +92,8 @@
 // Each object has a colour name (the convention shared across this example
 // series):
 //
-//     Device 389008            "Chipkin Example B-ALSC"     (instance configurable with --deviceID)
+//     Device 389008            "Chipkin Example B-ALSC"     (instance configurable with --deviceID,
+//                                                           Object_Name with --deviceName)
 //     Analog Input  1          "Bronze"      (REAL, degrees Celsius; read-only)
 //     Binary Input  1          "Emerald"     (active / inactive; read-only)
 //     Multi-State Input 1      "Hot Pink"    (state 1..3; read-only)
@@ -139,7 +140,7 @@
 // claims none for life safety): the Wire Tests move the simulated detector
 // through the loopback-only test control channel (simulation/SimulationControl.h),
 // which is off unless BALSC_SIMULATION_CONTROL_PORT is set.
-// Command line: --port <n>, --deviceID <n>.
+// Command line: --port <n>, --deviceID <n>, --deviceName <text>, --xml.
 //
 // All the UDP/stack plumbing lives in common/CASExampleHelper so this file can
 // stay focused on the BACnet logic.
@@ -169,7 +170,7 @@ using namespace CASBACnetStackExampleConstants;
 // 1. Example + device configuration
 // -----------------------------------------------------------------------------
 static const char* APP_NAME = "BACnet B-ALSC (Advanced Life Safety Controller) Example - C++";
-static const char* APP_VERSION = "1.2.0";
+static const char* APP_VERSION = "1.3.0";
 
 // The device instance. BACnet requires this to be configurable, so it defaults
 // to 389008 (docs/colour-table.md) and can be overridden on the command line
@@ -190,25 +191,26 @@ static uint32_t g_deviceInstance = 389008;
 // Update VENDOR_NAME below to match.
 static const uint32_t VENDOR_IDENTIFIER = 389;
 
-// The Device object's Object_Name.
-//
-// THIS IS THE ONE THAT WILL BITE YOU. Object_Name must be unique across the
-// whole BACnet internetwork, and here it is a COMPILE-TIME constant. The device
-// instance is runtime-configurable via --deviceID, so it is easy to ship two
-// units, configure their instances correctly, and still have BOTH announce
-// Object_Name "Chipkin Example B-ALSC" - a spec violation, and a hard BTL failure. In a real
-// product Object_Name must be per-unit configurable too: derive it from a serial
-// number, DIP switches, a config file, or add a --deviceName argument.
+// Your device's Object_Name - the DEFAULT one. Object_Name MUST BE UNIQUE ACROSS
+// THE BACNET INTERNETWORK (cl. 12.1.1.4) - two devices answering with the same
+// Object_Name is a spec violation, and nothing on the wire flags it as an error.
+// So it must be per-unit configurable, exactly like the instance: this example
+// takes it at start-up with --deviceName <text> (common/ ParseDeviceNameArg, read into g_deviceName in
+// main()); DEVICE_NAME is only what a unit announces when nobody configured it.
+// In your product, configure the name per unit (a serial number, DIP switches, a
+// config file, or this argument) and change the default below to something that
+// says "not configured yet".
 static const char* DEVICE_NAME = "Chipkin Example B-ALSC";
+static const char* g_deviceName = DEVICE_NAME; // --deviceName, or the default
 
 // The Device object's Description. Change it to what YOUR device actually is;
-// this string describes this tutorial.
+// this string describes this tutorial. Keep it under 255 characters: the stack
+// holds at most STACK_OPTION_MAX_CHARACTER_STRING_SIZE - 1 (255) octets from a
+// callback and refuses a longer value, so the property would read as "".
 static const char* DEVICE_DESCRIPTION =
     "Chipkin CAS BACnet Stack example - B-ALSC (Advanced Life Safety Controller) "
-    "profile. A SIMULATED smoke detector (Life Safety Point 1) and its zone raise "
-    "life-safety alarms to an operator workstation, which silences, acknowledges "
-    "and resets them; every alarm is logged in Event Log 1, and Schedule 1 drives "
-    "Analog Output 1 (AE-LS-B / AE-ACK-B / AE-INFO-B / AE-EL-I-B / SCHED-I-B).";
+    "profile. A SIMULATED smoke detector raises life-safety alarms to an operator "
+    "workstation; Event Log 1 logs them, and Schedule 1 drives Analog Output 1.";
 
 // Device identity strings (read by clients, and used to populate I-Am).
 //   VENDOR_NAME - your company name; it must match VENDOR_IDENTIFIER above.
@@ -266,6 +268,27 @@ static uint16_t g_bacnetIpUdpPort = 47808;
 // nudged by the up/down arrow keys. A real sensor would update this from
 // hardware instead.
 static float g_analogInput1Value = 21.5f;
+
+// Analog Input 1's Out_Of_Service (cl. 12.2.10). FALSE: Present_Value is the live
+// sensor value above. TRUE: Present_Value is decoupled from the sensor and holds
+// the value a client wrote (g_analogInput1SimulatedValue), "to allow simulating
+// specific conditions or for testing purposes" (12.2.10 (c)); the up/down keys
+// still move the sensor, but nothing reaches Present_Value until it is back in
+// service. Out_Of_Service is writable (Table 12-2 lists it R, which does not forbid
+// it); Present_Value is writable only while it is TRUE (Table 12-2 footnote 1).
+static bool g_analogInput1OutOfService = false;
+static float g_analogInput1SimulatedValue = 21.5f;
+// Set by the write callbacks; the main loop feeds the COV subscribers on its next
+// pass, after the stack has answered the write (see the main loop).
+static bool g_analogInput1UpdatePending = false;
+
+// Analog Input 1's COV_Increment (cl. 12.2.16): the smallest Present_Value change
+// that sends a COV notification to a SubscribeCOV subscriber. Analog Input 1
+// supports COV reporting, so cl. 12.2 footnote 2 REQUIRES this property; the stack
+// leaves it absent unless the application enables it (see the setup in main()).
+// 1.0 deg C: each up/down nudge (1.1) notifies. Not writable.
+static const uint32_t PROPERTY_IDENTIFIER_COV_INCREMENT = 22;
+static const float ANALOG_INPUT_COV_INCREMENT = 1.0f;
 
 // The commandable OUTPUT objects (all instance 1) and their colour names. These
 // are what make this a B-SA actuator: clients drive them with WriteProperty.
@@ -381,8 +404,11 @@ static const uint32_t RECIPIENT_PROCESS_IDENTIFIER = 1;
 
 // COV settings (DS-COV-B). Bronze (Analog Input 1) and Amber (Life Safety Point 1)
 // Present_Value are subscribable - see BACnetStack_SetPropertySubscribable in main().
+// The longest lifetime a SubscribeCOV may ask for: 8 hours. The BTL Test Plan lists
+// "Supports Lifetimes up to 8 hours in duration" as required for DS-COV-B (135.1
+// 9.10.1.10); a longer lifetime is refused with SERVICES / VALUE_OUT_OF_RANGE.
 static const uint32_t COV_MAX_ACTIVE_SUBSCRIPTIONS = 32;
-static const uint32_t COV_MAX_SUPPORTED_LIFETIME_SECONDS = 3600;
+static const uint32_t COV_MAX_SUPPORTED_LIFETIME_SECONDS = 8 * 60 * 60;
 
 // BACnet object type / property identifier / service numbers not already in
 // CASBACnetStackExampleConstants.h (verified against BACnetObjectType.h /
@@ -433,6 +459,7 @@ static const uint16_t OBJECT_TYPE_EVENT_LOG = 25;           // "Beige"
 static const uint32_t EVENT_LOG_INSTANCE = 1;                // "Beige"
 static const uint32_t EVENT_LOG_MAX_BUFFER_SIZE = 100;       // records held in memory
 
+static const uint32_t ERROR_CODE_WRITE_ACCESS_DENIED = 40;
 static const uint32_t ERROR_CODE_INVALID_OPERATION_IN_THIS_STATE = 139;
 static const uint32_t ERROR_CODE_SERVICE_REQUEST_DENIED = 29;
 
@@ -692,7 +719,15 @@ bool GetPropertyReal(const uint32_t deviceInstance, const uint16_t objectType,
         // this callback runs on the BACnetStack_Tick() thread, so blocking it
         // delays all BACnet processing. Sample the sensor on a timer/another
         // thread and just hand back the latest value from here.
-        *value = g_analogInput1Value;
+        // Out of service (12.2.10 (a)): decoupled from the sensor, so the value a
+        // client wrote is served instead.
+        *value = g_analogInput1OutOfService ? g_analogInput1SimulatedValue : g_analogInput1Value;
+        return true;
+    }
+    if (objectType == OBJECT_TYPE_ANALOG_INPUT &&
+        objectInstance == ANALOG_INPUT_INSTANCE &&
+        propertyIdentifier == PROPERTY_IDENTIFIER_COV_INCREMENT) {
+        *value = ANALOG_INPUT_COV_INCREMENT;
         return true;
     }
     // Analog Output (commandable): serve its Priority_Array slots and
@@ -901,8 +936,8 @@ bool GetPropertyUnsignedInteger(const uint32_t deviceInstance, const uint16_t ob
 }
 
 // BOOLEAN - Out_Of_Service is a required property of every input object and of
-// the Network Port. This is a read-only sensor, so nothing is ever out of
-// service: always false.
+// the Network Port. Analog Input 1 can be taken out of service by a client; every
+// other object is never out of service: false.
 bool GetPropertyBool(const uint32_t deviceInstance, const uint16_t objectType,
                      const uint32_t objectInstance, const uint32_t propertyIdentifier,
                      bool* value, const bool useArrayIndex,
@@ -922,8 +957,15 @@ bool GetPropertyBool(const uint32_t deviceInstance, const uint16_t objectType,
         *value = !c->isSet[propertyArrayIndex - 1];
         return true;
     }
+    // Analog Input 1 (Bronze) is the one object a client can take out of service
+    // (see SetPropertyBool).
+    if (propertyIdentifier == PROPERTY_IDENTIFIER_OUT_OF_SERVICE &&
+        objectType == OBJECT_TYPE_ANALOG_INPUT && objectInstance == ANALOG_INPUT_INSTANCE) {
+        *value = g_analogInput1OutOfService;
+        return true;
+    }
     // Out_Of_Service is a required property of every input and output object and of
-    // the Network Port. This example never takes anything out of service: false.
+    // the Network Port. Every other object is never taken out of service: false.
     if (propertyIdentifier == PROPERTY_IDENTIFIER_OUT_OF_SERVICE &&
         (objectType == OBJECT_TYPE_ANALOG_INPUT ||
          objectType == OBJECT_TYPE_BINARY_INPUT ||
@@ -982,16 +1024,19 @@ static bool ReturnCharacterString(const char* text, char* value,
                                   const uint32_t maxElementCount,
                                   uint8_t* encodingType) {
     uint32_t length = (uint32_t)strlen(text);
-    if (length > maxElementCount) {
+    // The stack offers a buffer of maxElementCount octets but holds at most
+    // maxElementCount - 1: a value of exactly maxElementCount is refused and the
+    // property reads as an empty string.
+    if (maxElementCount > 0 && length >= maxElementCount) {
         // Truncate SILENTLY to fit the stack's buffer. maxElementCount is
         // MAX_CHARACTER_STRING_SIZE (256 in this build), and our longest string
-        // (DEVICE_DESCRIPTION) fits with room to spare - so this never trips
+        // (DEVICE_DESCRIPTION, 227 characters) fits - so this never trips
         // here. But if you build with STACK_OPTION_TARGET_EMBEDDED, that limit drops to
         // 64, and a long Object_Name or Description would be clipped mid-word
         // with nothing on the wire or console to tell you. If you lengthen any
         // served string, check it against MAX_CHARACTER_STRING_SIZE for your
         // target, or make this truncation loud.
-        length = maxElementCount;
+        length = maxElementCount - 1;
     }
     memcpy(value, text, length);
     *valueElementCount = length;
@@ -1032,7 +1077,7 @@ bool GetPropertyCharString(const uint32_t deviceInstance, const uint16_t objectT
     // Object_Name - the colour name for each object.
     if (propertyIdentifier == PROPERTY_IDENTIFIER_OBJECT_NAME) {
         if (objectType == OBJECT_TYPE_DEVICE && objectInstance == g_deviceInstance) {
-            return ReturnCharacterString(DEVICE_NAME, value, valueElementCount, maxElementCount, encodingType);
+            return ReturnCharacterString(g_deviceName, value, valueElementCount, maxElementCount, encodingType);
         }
         if (objectType == OBJECT_TYPE_ANALOG_INPUT && objectInstance == ANALOG_INPUT_INSTANCE) {
             return ReturnCharacterString("Bronze", value, valueElementCount, maxElementCount, encodingType);
@@ -1119,9 +1164,22 @@ bool SetPropertyReal(const uint32_t deviceInstance, const uint16_t objectType,
                      uint32_t* errorCode) {
     (void)useArrayIndex;
     (void)propertyArrayIndex;
-    (void)errorCode;
     if (deviceInstance != g_deviceInstance) {
         return false;
+    }
+    // Analog Input 1 (Bronze) Present_Value: writable only while Out_Of_Service is
+    // TRUE (cl. 12.2.4 / Table 12-2 footnote 1). In service it is the sensor's, and a
+    // write is refused. COV subscribers are fed like any other change.
+    if (objectType == OBJECT_TYPE_ANALOG_INPUT && objectInstance == ANALOG_INPUT_INSTANCE &&
+        propertyIdentifier == PROPERTY_IDENTIFIER_PRESENT_VALUE) {
+        if (!g_analogInput1OutOfService) {
+            *errorCode = ERROR_CODE_WRITE_ACCESS_DENIED;
+            return false;
+        }
+        g_analogInput1SimulatedValue = value;
+        g_analogInput1UpdatePending = true;
+        printf("WriteProperty: Analog Input 1 (Bronze) Present_Value <- %.2f (out of service)\n", value);
+        return true;
     }
     Commandable* c = GetCommandable(objectType, objectInstance);
     if (c != NULL && objectType == OBJECT_TYPE_ANALOG_OUTPUT &&
@@ -1136,6 +1194,36 @@ bool SetPropertyReal(const uint32_t deviceInstance, const uint16_t objectType,
         CommandWrite(c, priority, (double)value);
         printf("WriteProperty: Analog Output %u (Chartreuse) <- %.2f @ priority %u\n",
                objectInstance, value, EffectivePriority(priority));
+        return true;
+    }
+    return false;
+}
+
+// BOOLEAN write - Analog Input 1 (Bronze) Out_Of_Service. TRUE decouples
+// Present_Value from the sensor: it holds what it read at that moment until a
+// client writes another value. FALSE returns it to the sensor. Either way the
+// Present_Value COV subscribers and the Status_Flags OUT_OF_SERVICE bit follow.
+bool SetPropertyBool(const uint32_t deviceInstance, const uint16_t objectType,
+                     const uint32_t objectInstance, const uint32_t propertyIdentifier,
+                     const bool value, const bool useArrayIndex,
+                     const uint32_t propertyArrayIndex, const uint8_t priority,
+                     uint32_t* errorCode) {
+    (void)useArrayIndex;
+    (void)propertyArrayIndex;
+    (void)priority;
+    (void)errorCode;
+    if (deviceInstance == g_deviceInstance && objectType == OBJECT_TYPE_ANALOG_INPUT &&
+        objectInstance == ANALOG_INPUT_INSTANCE &&
+        propertyIdentifier == PROPERTY_IDENTIFIER_OUT_OF_SERVICE) {
+        if (value != g_analogInput1OutOfService) {
+            if (value) {
+                g_analogInput1SimulatedValue = g_analogInput1Value;
+            }
+            g_analogInput1OutOfService = value;
+            g_analogInput1UpdatePending = true;
+            printf("Analog Input 1 (Bronze): Out_Of_Service %s%s\n", value ? "TRUE" : "FALSE",
+                   value ? " - Present_Value is now writable" : " - back on the sensor");
+        }
         return true;
     }
     return false;
@@ -1744,11 +1832,18 @@ int main(int argc, char** argv) {
     // --- Command line + version --------------------------------------------
     // --help / --version print and exit, so handle them before we bind a socket
     // or touch the stack.
-    if (CASExampleHelper::HandleHelpAndVersionArgs(argc, argv, APP_NAME, APP_VERSION)) {
+    // The help lists only the options this example reads: no --dcc-password (the
+    // DeviceCommunicationControl / ReinitializeDevice password is DCC_PASSWORD in
+    // this file, not a command-line option), and --deviceName (read below).
+    if (CASExampleHelper::HandleHelpAndVersionArgs(argc, argv, APP_NAME, APP_VERSION,
+                                                   false,   // no --dcc-password
+                                                   true)) { // --deviceName
         return 0;
     }
     const uint16_t port = CASExampleHelper::ParsePortArg(argc, argv, 47808);
     g_deviceInstance = CASExampleHelper::ParseDeviceIdArg(argc, argv, g_deviceInstance);
+    g_deviceName = CASExampleHelper::ParseDeviceNameArg(argc, argv, DEVICE_NAME);
+    CASExampleHelper::ParseXmlLogArg(argc, argv); // --xml: dump every RX/TX frame as XML instead of one line (off by default)
     CASExampleHelper::PrintVersion(APP_NAME, APP_VERSION);
 
     // --- Bind the BACnet/IP socket -----------------------------------------
@@ -1786,6 +1881,7 @@ int main(int argc, char** argv) {
     // outputs. One callback per written data type, plus the NULL callback that
     // relinquishes a priority slot.
     BACnetStack_RegisterCallbackSetPropertyReal(SetPropertyReal);
+    BACnetStack_RegisterCallbackSetPropertyBool(SetPropertyBool);
     BACnetStack_RegisterCallbackSetPropertyEnumerated(SetPropertyEnumerated);
     BACnetStack_RegisterCallbackSetPropertyUnsignedInteger(SetPropertyUnsignedInteger);
     BACnetStack_RegisterCallbackSetPropertyNull(SetPropertyNull);
@@ -2046,6 +2142,24 @@ int main(int argc, char** argv) {
         printf("Error: Failed to enable State_Text on Multi-State Input 1 (Hot Pink).\n");
         return 1;
     }
+    // Analog Input 1 (Bronze) supports COV reporting (DS-COV-B), so its COV_Increment
+    // is required (cl. 12.2 footnote 2); GetPropertyReal serves the value.
+    if (!BACnetStack_SetPropertyEnabled(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
+                                        ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_COV_INCREMENT, true)) {
+        printf("Error: Failed to enable COV_Increment on Analog Input 1 (Bronze).\n");
+        return 1;
+    }
+    // Analog Input 1 can be taken out of service (cl. 12.2.10), and its Present_Value
+    // "shall be writable when Out_Of_Service is TRUE" (Table 12-2 footnote 1). Both
+    // are marked writable here; SetPropertyReal refuses Present_Value (write access
+    // denied) while Out_Of_Service is FALSE.
+    if (!BACnetStack_SetPropertyWritable(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
+                                         ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_OUT_OF_SERVICE, true) ||
+        !BACnetStack_SetPropertyWritable(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
+                                         ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_PRESENT_VALUE, true)) {
+        printf("Error: Failed to make Analog Input 1 (Bronze) Out_Of_Service and Present_Value writable.\n");
+        return 1;
+    }
 
     // --- Make the output objects commandable --------------------------------
     // A commandable object's Present_Value is resolved from a 16-slot
@@ -2234,7 +2348,7 @@ int main(int argc, char** argv) {
     }
 
     printf("FYI: Device %u (\"%s\") ready. Vendor ID %u. Press 'h' for help.\n",
-           g_deviceInstance, DEVICE_NAME, VENDOR_IDENTIFIER);
+           g_deviceInstance, g_deviceName, VENDOR_IDENTIFIER);
 
     // --- Run the stack ------------------------------------------------------
     // BACnetStack_Tick() processes incoming messages and timers. Call it
@@ -2243,6 +2357,17 @@ int main(int argc, char** argv) {
     while (running) {
         BACnetStack_Tick();
         SimulationControl::Service();   // SIMULATION: the detector's test control channel
+
+        // Analog Input 1 changed by a WriteProperty (Out_Of_Service or Present_Value):
+        // tell its COV subscribers now, one Tick after the write was answered, so a
+        // client gets the SimpleACK of its write before the notification it caused.
+        if (g_analogInput1UpdatePending) {
+            g_analogInput1UpdatePending = false;
+            BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT, ANALOG_INPUT_INSTANCE,
+                                    PROPERTY_IDENTIFIER_OUT_OF_SERVICE);
+            BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT, ANALOG_INPUT_INSTANCE,
+                                    PROPERTY_IDENTIFIER_PRESENT_VALUE);
+        }
 
         // --- Deferred restart (DM-RD-B) -------------------------------------
         // ReinitializeDevice only ARMED the restart; the SimpleACK has now had a
@@ -2268,6 +2393,8 @@ int main(int argc, char** argv) {
             if (restartKind == CASExampleHelper::RestartKind::Cold) {
                 printf("Restart: COLDSTART - restoring power-on state.\n");
                 g_analogInput1Value = 21.5f;
+                g_analogInput1OutOfService = false;
+                g_analogInput1SimulatedValue = 21.5f;
                 const Commandable analogOutputAtPowerOn = { { false }, { 0 }, 20.0 };
                 const Commandable binaryOutputAtPowerOn = { { false }, { 0 }, 0.0 };
                 const Commandable multiStateOutputAtPowerOn = { { false }, { 0 }, 1.0 };
@@ -2301,14 +2428,19 @@ int main(int argc, char** argv) {
             case CASExampleHelper::KeyCommand::ArrowUp:
                 g_analogInput1Value += 1.1f;
                 // Feed Bronze's COV subscribers (DS-COV-B) - see the file header.
-                BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
-                                        ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_PRESENT_VALUE);
+                // Out of service, Present_Value is decoupled from the sensor: nothing to feed.
+                if (!g_analogInput1OutOfService) {
+                    BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
+                                            ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_PRESENT_VALUE);
+                }
                 printf("Analog Input 1 (Bronze) = %.1f C\n", g_analogInput1Value);
                 break;
             case CASExampleHelper::KeyCommand::ArrowDown:
                 g_analogInput1Value -= 1.1f;
-                BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
-                                        ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_PRESENT_VALUE);
+                if (!g_analogInput1OutOfService) {
+                    BACnetStack_UpdateValue(g_deviceInstance, OBJECT_TYPE_ANALOG_INPUT,
+                                            ANALOG_INPUT_INSTANCE, PROPERTY_IDENTIFIER_PRESENT_VALUE);
+                }
                 printf("Analog Input 1 (Bronze) = %.1f C\n", g_analogInput1Value);
                 break;
             case CASExampleHelper::KeyCommand::DemoAdvance: {

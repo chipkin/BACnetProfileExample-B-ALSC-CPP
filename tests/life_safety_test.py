@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """B-ALSC Wire Test - a smoke detector goes to alarm; the operator silences, acknowledges and resets it.
 
-    python3 tests/life_safety_test.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/life_safety_test.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 The Profile Function (135-2024 L.5.1): "A B-ALSC device performs life safety alarm detection
 and control. It supports life safety objects and limited modification of its alarm and event

@@ -64,14 +64,14 @@ three things:
 - **[tests/](tests/README.md)** - the Wire Tests that prove the scenario and
   the Failure Modes, from outside the example, over BACnet/IP.
 
-> **Versions:** this document describes **example v1.2.0**, built and verified
-> against **CAS BACnet Stack 6.0.23 (`6.x` @ `64b2cfac5`)**, at
-> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.4.0**
+> **Versions:** this document describes **example v1.3.0**, built and verified
+> against **CAS BACnet Stack 6.0.23 (`6.x` @ `69b6249f`)**, at
+> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.5.0**
 > and `wiretest/` at **v0.7.0**. Running the example prints the first three -
 > if what it prints disagrees with this line, trust the program and check
 > `CHANGELOG.md`.
 
-> **Known gaps at stack `6.x` @ `64b2cfac5`** (details in [TODO.md](TODO.md);
+> **Known gaps at stack `6.x` @ `69b6249f`** (details in [TODO.md](TODO.md);
 > the Wire Tests report each as a `[KNOWN GAP]`):
 >
 > - **Zone_Members is always empty.** Azure rolls up Amber, but the customer
@@ -113,7 +113,7 @@ Every required property of every object, and who answers it, is in
 
 ```
 Device 389008  "Chipkin Example B-ALSC"   (Vendor 389 - Chipkin Automation Systems)
-    ├── Analog Input  1       "Bronze"      read-only sensor (REAL, deg C); COV-subscribable
+    ├── Analog Input  1       "Bronze"      sensor (REAL, deg C); COV-subscribable; Out_Of_Service writable
     ├── Binary Input  1       "Emerald"     read-only sensor (active/inactive)
     ├── Multi-State Input 1   "Hot Pink"    read-only sensor (state 1..3)
     ├── Analog Output 1       "Chartreuse"  writable, commandable (REAL); Schedule-driven at priority 8
@@ -138,7 +138,7 @@ the two files diff cleanly.
 |---------|-------|
 | ReadProperty / ReadPropertyMultiple | DS-RP-B / DS-RPM-B. |
 | WriteProperty / WritePropertyMultiple | The commandable outputs, Amber's/Azure's `Mode`, Crimson's `Recipient_List`, Beige's `Enable`. Amber's/Azure's `Present_Value` is read-only (Table 12-18): `write-access-denied`. |
-| SubscribeCOV | Bronze's and Amber's `Present_Value` (DS-COV-B). |
+| SubscribeCOV | Bronze's and Amber's `Present_Value` (DS-COV-B); Bronze's `COV_Increment` is 1.0. |
 | ConfirmedEventNotification | Initiated to the `Recipient_List`, retried up to `Number_Of_APDU_Retries` (3) times (AE-LS-B). |
 | LifeSafetyOperation | Silence / unsilence / reset (AE-LS-B). Compiled in by `CMakeLists.txt` - see [Build](#build). |
 | AcknowledgeAlarm | The stack sends the `ACK_NOTIFICATION` (AE-ACK-B). |
@@ -257,15 +257,21 @@ advertise a service it cannot execute.
 ```
 
 Options: `--port <n>` (default 47808), `--deviceID <n>` (default 389008),
-`--help` (show usage and exit), `--version` (print the example, stack, and
+`--deviceName <text>` (default `Chipkin Example B-ALSC`; the Device object's
+`Object_Name`, 1..255 bytes, no control characters; it must be unique across the
+BACnet internetwork, so give every unit its own - BACnet requires it to be
+configurable, like the instance; an invalid value prints a warning and keeps the
+default), `--xml` (off by default; print every received and sent BACnet message
+as an indented XML block instead of a one-line summary - very verbose, for
+protocol debugging), `--help` (show usage and exit), `--version` (print the example, stack, and
 `common/` versions and exit).
 
 Expected output (captured from a real build, here with `--port 48068`):
 
 ```
-BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.2.0
+BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.3.0
 CAS BACnet Stack version: 6.0.23.0
-Common helper (common/) version: 3.4.0
+Common helper (common/) version: 3.5.0
 FYI: Listening for BACnet/IP on UDP port 48068 (Network Port 1).
 TX 21 bytes to 192.168.3.255:48068 (broadcast) (Network Port 1) - Unconfirmed: I-Am
 TX 8 bytes to 192.168.3.255:48068 (broadcast) (Network Port 1) - Unconfirmed: Who-Is
@@ -300,7 +306,7 @@ While the example runs, these keys are available:
 |-----|--------|
 | `h` | Show the version information and this command list. |
 | `q` | Quit. |
-| up arrow | Increase Analog Input 1 (`Bronze`) by 1.1 (feeds its COV subscribers). |
+| up arrow | Increase Analog Input 1 (`Bronze`) by 1.1 (feeds its COV subscribers while it is in service). |
 | down arrow | Decrease Analog Input 1 (`Bronze`) by 1.1. |
 | `s` | Add a `Weekly_Schedule` transition to Schedule 1 (`Saffron`) for right now (device clock). |
 
@@ -354,7 +360,8 @@ proves is removed - every one was mutation-verified (see `CHANGELOG.md`).
 
 | Script | What it proves |
 |--------|----------------|
-| `discovery_test.py` | Who-Is, `Object_List`, a ReadProperty of every listed property; `Log_Buffer` refused. |
+| `discovery_test.py` | Who-Is, `Object_List`, a ReadProperty of every listed property; `Log_Buffer` refused; `Database_Revision` (14); a SubscribeCOV with an 8-hour lifetime. |
+| `configuration_test.py` | The command line: `--deviceID` and `--deviceName` configure the Device's instance and Object_Name (Who-Is, ReadProperty, Who-Has; a WriteProperty of the name is refused; the name's limits), and `--help` lists exactly the options the example reads. |
 | `life_safety_test.py` | The life-safety scenario (as B-LSC's): smoke -> latched alarm -> notifications to Device 389108 (not to a stranger) -> RESET refused while smoke is present -> SILENCE -> AcknowledgeAlarm + ACK_NOTIFICATION -> the latch holds -> RESET -> return to normal; an unacknowledged alarm stays listed. Zone_Members: `[KNOWN GAP]`. |
 | `fault_test.py` | A detector fault -> Reliability `MULTI_STATE_FAULT`, FAULT, to-fault notification; `RESET_FAULT` refused; repaired. |
 | `event_log_test.py` | With `Enable` FALSE nothing is logged; written TRUE, the alarm is logged (ReadRange) even though the recipient is unreachable, and GetEventInformation still lists it. Enable at start-up: `[KNOWN GAP]` (#3301). |

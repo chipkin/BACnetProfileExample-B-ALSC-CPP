@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """B-ALSC Wire Test - the controller logs its own life-safety alarms in Event Log 1, even when nobody hears them.
 
-    python3 tests/event_log_test.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/event_log_test.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 135-2024 L.5.1: "Logging of event notifications of the local device in an Event Log object"
 (AE-EL-I-B, K.2.21: "The B device collects the event notifications in an internal buffer";

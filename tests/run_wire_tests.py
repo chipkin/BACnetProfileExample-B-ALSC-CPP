@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """Run every B-ALSC Wire Test, one after another, and report one result.
 
-    python3 tests/run_wire_tests.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/run_wire_tests.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 Exit code 0 = every check in every script passed.
 """
@@ -18,7 +18,7 @@ sys.path.insert(0, str(REPOSITORY))
 
 import wiretest  # noqa: E402  (the vendored harness at the repository root)
 
-SCRIPTS = ["discovery_test.py", "life_safety_test.py", "fault_test.py", "event_log_test.py",
+SCRIPTS = ["discovery_test.py", "configuration_test.py", "life_safety_test.py", "fault_test.py", "event_log_test.py",
            "distribution_test.py", "schedule_test.py"]
 
 
@@ -26,7 +26,7 @@ def main():
     arguments = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     arguments.add_argument("--exe", default=str(wiretest.default_exe(REPOSITORY, "BACnetExampleBALSC")),
                            help="path to BACnetExampleBALSC (default: build/BACnetExampleBALSC)")
-    arguments.add_argument("--port", type=int, default=47821, help="the advanced life safety controller's UDP port (default 47821)")
+    arguments.add_argument("--port", type=int, default=47836, help="the advanced life safety controller's UDP port (default 47836)")
     args = arguments.parse_args()
 
     outcomes = []

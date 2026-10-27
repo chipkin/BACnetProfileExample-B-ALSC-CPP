@@ -65,14 +65,18 @@ OPERATOR_PROCESS_IDENTIFIER = 7                      # the workstation's own pro
 NOTIFICATION_WAIT = 5.0                               # seconds allowed for a notification to arrive
 QUIET_WAIT = 2.0                                      # seconds watched to show that nothing arrives
 SIMULATION_CONTROL_VARIABLE = "BALSC_SIMULATION_CONTROL_PORT"
+ERROR_CLASS_OBJECT = 1
+ERROR_CODE_UNKNOWN_OBJECT = 31
+REQUEST_ATTEMPTS = 3                                  # a plain client's tries per request (see client())
+REQUEST_TIMEOUT = 0.5                                 # seconds; a loopback answer takes milliseconds
 
 
 def parser(description):
     arguments = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     arguments.add_argument("--exe", default=str(wiretest.default_exe(REPOSITORY, "BACnetExampleBALSC")),
                            help="path to BACnetExampleBALSC (default: build/BACnetExampleBALSC)")
-    arguments.add_argument("--port", type=int, default=47821,
-                           help="the controller's UDP port (default 47821); the test control channel uses port + 1")
+    arguments.add_argument("--port", type=int, default=47836,
+                           help="the controller's UDP port (default 47836); the test control channel uses port + 1")
     return arguments
 
 
@@ -81,6 +85,26 @@ def workstation():
     sent again once, with a visible [RETRY] line - a lost UDP datagram, seen about 3 in 1000 on a
     busy Windows host. An Error or Reject is an answer and is never retried."""
     return Workstation(retries=1)
+
+
+
+def client():
+    """A wiretest.Client whose unanswered requests are sent again after REQUEST_TIMEOUT, with a
+    visible [RETRY] line, up to REQUEST_ATTEMPTS times - as a BACnet client does."""
+    return wiretest.Client(retries=REQUEST_ATTEMPTS - 1, timeout=REQUEST_TIMEOUT)
+
+
+def write(client, port, object_reference, property_identifier, value_octets, priority=None):
+    return client.write_property(port, *object_reference, property_identifier, value_octets, priority)
+
+
+def refused(answer):
+    """Was the request answered with an Error or a Reject?"""
+    return answer.answered and answer.frame.pdu_type in (wiretest.PDU_ERROR, wiretest.PDU_REJECT)
+
+
+def describe(answer):
+    return answer.describe()
 
 
 def start_controller(args):

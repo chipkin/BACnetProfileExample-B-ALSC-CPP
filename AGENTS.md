@@ -43,7 +43,8 @@ This repository is self-contained:
   branch.
 - `TODO.md` - what B-ALSC requires but the stack's customer surface cannot yet
   do, and why. Keep it honest and current.
-- `tests/` + `wiretest/` - the Wire Tests and the series' shared harness
+- `tests/` + `wiretest/` - the Wire Tests (discovery, `configuration_test.py`,
+  life safety, fault, Event Log, distribution, schedule) and the series' shared harness
   (vendored at 0.7.0; change it only as the series does, in every example).
   Every check must fail when its feature is removed: mutation-verify any change.
 - `submodules/cas-bacnet-stack/` - the **CAS BACnet Stack** as a git submodule
@@ -75,8 +76,8 @@ commands above.
 ## Run
 
 ```bash
-./build/BACnetExampleBALSC [--port 47808] [--deviceID 389008]   # Linux/macOS
-.\build\Release\BACnetExampleBALSC.exe [--port 47808] [--deviceID 389008]   # Windows
+./build/BACnetExampleBALSC [--port 47808] [--deviceID 389008] [--deviceName "Chipkin Example B-ALSC"]   # Linux/macOS
+.\build\Release\BACnetExampleBALSC.exe [--port 47808] [--deviceID 389008] [--deviceName "Chipkin Example B-ALSC"]   # Windows
 ```
 
 Interactive keys while running: `h` help, `q` quit, up/down nudge Analog Input 1

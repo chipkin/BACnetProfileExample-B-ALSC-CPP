@@ -3,7 +3,7 @@
 # Public-domain example code (CC0) - see ../LICENSE.
 """B-ALSC Wire Test - Failure Mode: the smoke detector develops a fault.
 
-    python3 tests/fault_test.py [--exe build/BACnetExampleBALSC] [--port 47821]
+    python3 tests/fault_test.py [--exe build/BACnetExampleBALSC] [--port 47836]
 
 A detector whose head is pulled off its base can no longer see smoke. The Life Safety Point's
 FAULT_LIFE_SAFETY fault algorithm (135-2024 cl. 13.4, applied per cl. 12.15) turns that into a
