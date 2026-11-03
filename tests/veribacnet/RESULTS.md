@@ -7,42 +7,37 @@ addresses.
 
 | | |
 |---|---|
-| Date | 2026-10-27 |
-| Example | BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.2.0 (`common/` 3.5.0), CAS BACnet Stack `6.x` @ `69b6249f` |
+| Date | 2026-10-30 |
+| Example | BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.3.0 (`common/` 3.5.0), CAS BACnet Stack `6.x` @ `69b6249f` |
 | Profile | B-ALSC (BACnet Advanced Life Safety Controller) |
 | Transport | BACnet/IP, UDP port 47836 |
 | VeriBACnet | 0.20.0 (its test device uses CAS BACnet Stack 6.0.23.0) |
 | Test plan | 244 BTL tests (ANSI/ASHRAE 135.1-2023) selected for the B-ALSC profile |
-| Result | **100 PASS · 1 FAIL · 0 ERROR · 143 SKIP** |
+| Result | **100 PASS · 11 FAIL · 0 ERROR · 133 SKIP** |
 
 **Judged BTL-clean on BACnet/IP, with a star**: no failure or error is the
-example's own fault, the one failure is tracked, and every skipped test has a
-stated reason. The star means some of the functions the example exists for
-were not measured by VeriBACnet in this run (below). See "What BTL-clean means"
-in [README.md](README.md). This is not BTL certification.
+example's own fault, all 11 failures are tracked test-tool or test-script
+issues, and every skipped test has a stated reason. The star means some of the
+functions the example exists for were not measured by VeriBACnet in this run
+(below). See "What BTL-clean means" in [README.md](README.md). This is not BTL
+certification.
 
-**What changed since the last run:**
-- Analog Input 1 can now be taken out of service. Out_Of_Service is writable,
-  and while it is TRUE the Present_Value is decoupled from the sensor and
-  writable (a write in service is still refused). A client can therefore
-  simulate a reading, and the COV notification tests that need a value change
-  (8.2.1, 8.2.2, 8.3.1, 8.3.2) now run and pass. The example's Wire Tests check
-  the write, read-back and refusal cycle.
-- The test tool was updated: its COV, write and Network Port scripts now use
-  the device's own objects, so 9.22.1.5, 9.23.1.3, 9.23.1.8, 9.23.2.3 and
-  9.23.2.15 pass, as do 7.2.2 and 9.22.2.1.
+**What changed since the last run:** the test tool moved on (new COV, write and
+event scripts), and the example moved to v1.3.0 with no change in behaviour
+that these tests measure. Ten of the 11 failures are COV rows (8.2.1, 8.2.2,
+8.3.1, 8.3.2 and 9.24.1.6-.10, .12) that the tool's own 9.10.2.3 row sets up:
+it fills Analog Input 1's ten-entry subscription table and never cancels it, so
+later COV rows are refused with an out-of-space error (tracked).
+Run alone against a fresh start of the example, those rows pass
+(9.24.1.7 and .12 then skip, they need an operator). The 11th failure is 9.9.2.2
+(tracked).
 
-**Measured coverage:** 101 of the 244 selected tests ran (100 passed, 1
-failed). Of the 143 skipped, 86 wait on a test-tool or test-script fix
-(tracked; 62 are scenarios the tool cannot yet set up on a device it did not
-build, mostly Schedule, Calendar, Event Log and Notification Class, and 12 are
-AcknowledgeAlarm tests). 27 need an operator: this device's alarms come from a
-simulated smoke detector, which only an operator can trigger. 30 do not apply
-to this device: no Trend Log or Event Enrollment, and it neither creates nor
-deletes objects. Its Protocol_Revision (30) is outside the Revision 0-19 and
-0-3 test forms, and it refuses the deprecated DeviceCommunicationControl
-DISABLE option, as that revision requires. Nothing was skipped for other
-reasons.
+**Measured coverage:** 111 of the 244 selected tests ran (100 passed, 11
+failed). Of the 133 skipped, 21 need an operator (this device's alarms come
+from a simulated smoke detector, which only an operator can trigger), and the
+rest wait on a test-tool or test-script fix (tracked), or do not apply to this
+device (no Trend Log or Event Enrollment; it neither creates nor deletes
+objects; its Protocol_Revision is outside the older test forms).
 
 **Measured now:**
 - ReadProperty and ReadPropertyMultiple: all 25 tests passed.

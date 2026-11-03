@@ -6,8 +6,8 @@ its Failure Modes, and proves both with Wire Tests (`tests/`). B-ALSC is B-LSC p
 Event Log, internal scheduling and a configurable recipient list; this example is
 `BACnetProfileExample-B-LSC-CPP` plus those, and items 1-2 are the same as B-LSC's. The
 items below are what it still does not do, why, and what it would take. Re-check every
-entry whenever the Stack Pin moves. Checked at stack `6.x` @ `69b6249f` (6.0.23),
-2026-10-26.
+entry whenever the Stack Pin moves. Checked at stack `6.x` @ `1e7dffe2b` (6.0.23): the
+Wire Tests passed on Windows on 2026-11-01.
 
 ## 1. Life Safety Zone 1 (Azure) Zone_Members cannot be set [KNOWN GAP]
 
@@ -46,8 +46,8 @@ nothing while it is FALSE.
 **Blocked on** [chipkin/cas-bacnet-stack#3301](https://github.com/chipkin/cas-bacnet-stack/issues/3301)
 (open; also found by B-AEC-CPP).
 
-Note: B-AEC-CPP sees each of its own notifications logged twice (stack #3957: the device
-logs its own BROADCAST notification again when it hears it). This example's recipients are
+Note: earlier stack revisions logged a device's own BROADCAST notification a second time
+when the device heard it (stack #3957, fixed in the stack). This example's recipients are
 a device or an address, never a broadcast, and `tests/event_log_test.py` checks each alarm
 is logged exactly once.
 
@@ -71,7 +71,7 @@ is logged exactly once.
   (B-AAC-CPP's canonical pattern), and a Wire Test drives it headless (no `s` key).
 - AcknowledgeAlarm and GetEventInformation are exercised end to end.
 
-## 5. Other limits at 1.3.0
+## 5. Other limits at 1.3.1
 
 - **Nothing the network writes is kept across a restart.** The example holds its state in
   memory only: Notification Class `Recipient_List`, Enable, the Schedule and Calendar

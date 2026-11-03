@@ -64,14 +64,14 @@ three things:
 - **[tests/](tests/README.md)** - the Wire Tests that prove the scenario and
   the Failure Modes, from outside the example, over BACnet/IP.
 
-> **Versions:** this document describes **example v1.3.0**, built and verified
-> against **CAS BACnet Stack 6.0.23 (`6.x` @ `69b6249f`)**, at
-> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.5.0**
+> **Versions:** this document describes **example v1.3.1**, built and verified
+> against **CAS BACnet Stack 6.0.23 (`6.x` @ `1e7dffe2b`)**, at
+> **Protocol_Revision 30**, with the vendored `common/` helper at **v3.6.1**
 > and `wiretest/` at **v0.7.0**. Running the example prints the first three -
 > if what it prints disagrees with this line, trust the program and check
 > `CHANGELOG.md`.
 
-> **Known gaps at stack `6.x` @ `69b6249f`** (details in [TODO.md](TODO.md);
+> **Known gaps at stack `6.x` @ `1e7dffe2b`** (details in [TODO.md](TODO.md);
 > the Wire Tests report each as a `[KNOWN GAP]`):
 >
 > - **Zone_Members is always empty.** Azure rolls up Amber, but the customer
@@ -269,9 +269,9 @@ protocol debugging), `--help` (show usage and exit), `--version` (print the exam
 Expected output (captured from a real build, here with `--port 48068`):
 
 ```
-BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.3.0
+BACnet B-ALSC (Advanced Life Safety Controller) Example - C++ v1.3.1
 CAS BACnet Stack version: 6.0.23.0
-Common helper (common/) version: 3.5.0
+Common helper (common/) version: 3.6.1
 FYI: Listening for BACnet/IP on UDP port 48068 (Network Port 1).
 TX 21 bytes to 192.168.3.255:48068 (broadcast) (Network Port 1) - Unconfirmed: I-Am
 TX 8 bytes to 192.168.3.255:48068 (broadcast) (Network Port 1) - Unconfirmed: Who-Is
@@ -396,7 +396,7 @@ There is one example repository per standardized device profile in ASHRAE 135-20
 
 | Profile | C++ | Node.js | C# | Rust | Python | Go |
 |---|---|---|---|---|---|---|
-| **B-LSC** Life Safety Controller | [B-LSC-CPP](https://github.com/chipkin/BACnetProfileExample-B-LSC-CPP) 🚧 | Ask | Ask | Ask | Ask | Ask |
+| **B-LSC** Life Safety Controller | [B-LSC-CPP](https://github.com/chipkin/BACnetProfileExample-B-LSC-CPP) | Ask | Ask | Ask | Ask | Ask |
 | **B-ALSC** Advanced Life Safety Controller | [B-ALSC-CPP](https://github.com/chipkin/BACnetProfileExample-B-ALSC-CPP) | Ask | Ask | Ask | Ask | Ask |
 
 ### Access control controllers (Annex L.6)
@@ -464,7 +464,7 @@ Client-side profiles.
 | **B-EWS** Elevator Workstation | planned | — | — | — | — | — |
 | **B-AEWS** Advanced Elevator Workstation | planned | — | — | — | — | — |
 
-🚧 = in progress. ⛔ = Blocked Example (blocked on the named stack gap). "Ask" = not yet built for that language; contact Chipkin if you need it. Profile definitions: ANSI/ASHRAE 135-2024 Annex L. BIBB definitions: Annex K. Get the stack: <https://store.chipkin.com/services/stacks/bacnet-stack>.
+⛔ = Blocked Example (blocked on the named stack gap). "Ask" = not yet built for that language; contact Chipkin if you need it. Profile definitions: ANSI/ASHRAE 135-2024 Annex L. BIBB definitions: Annex K. Get the stack: <https://store.chipkin.com/services/stacks/bacnet-stack>.
 <!-- PROFILE-TABLE:END -->
 
 ## References

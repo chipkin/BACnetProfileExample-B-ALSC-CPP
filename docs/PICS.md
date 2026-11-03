@@ -10,7 +10,7 @@ see [README.md](../README.md).
 > `CHANGE ALL OF THIS BEFORE YOU SHIP` block at the top of `main.cpp`. The
 > example has **not** been submitted for BTL certification.
 
-> **Status at stack `6.x` @ `69b6249f`.** The example is Profile-functional:
+> **Status at stack `6.x` @ `1e7dffe2b`.** The example is Profile-functional:
 > a simulated smoke detector drives Life Safety Point 1 "Amber" and Life Safety
 > Zone 1 "Azure" to alarm, the alarms go confirmed to the recipients in
 > Notification Class 1's writable `Recipient_List`, Event Log 1 logs them, and
@@ -30,7 +30,7 @@ see [README.md](../README.md).
 | **Vendor Identifier** | 389 |
 | **Product Name** | CAS BACnet Stack Example - B-ALSC |
 | **Product Model Number** | CAS BACnet Stack Example - B-ALSC |
-| **Application Software Version** | 1.3.0 |
+| **Application Software Version** | 1.3.1 |
 | **Firmware Revision** | 6.0.23.0 (the CAS BACnet Stack version) |
 | **BACnet Protocol Version** | 1 |
 | **BACnet Protocol Revision** | 30 |
@@ -136,7 +136,7 @@ Point 1; one with no object operates both.
 
 Segmentation is **supported in both directions**
 (`Segmentation_Supported` = `segmented-both`), by the stack: at `6.x` @
-`69b6249f` the customer build compiles `STACK_OPTION_SEGMENTATION` in (stack
+`1e7dffe2b` the customer build compiles `STACK_OPTION_SEGMENTATION` in (stack
 #2992), and this example keeps the stack's defaults for `Max_Segments_Accepted`
 and `APDU_Segment_Timeout`. Table 12-13 footnote 1: "These properties are
 required if, and shall be present only if, segmentation of any kind is
@@ -343,7 +343,7 @@ Every object this example creates, and every REQUIRED property of each (per ANSI
 | Operation_Expected | BACnetLifeSafetyOperation | app | no |
 | Property_List | BACnetARRAY[N] of BACnetPropertyIdentifier | stack | no |
 
-### Life Safety Zone 1 "Azure" - The smoke detector's zone. F-LIFESAFETY / F-ALARM-LS. Rolls up Life Safety Point 1 (Amber): takes its detector reading, latches alarm the same way, and a LifeSafetyOperation addressed to the zone also operates Amber. Event_State is genuinely computed (the same two algorithms are armed on Azure), marked accepted for the same generator-limitation reason. Reliability as Amber's. Zone_Members (cl. 12.16.26, required, BACnetLIST of BACnetDeviceObjectReference) should list Amber but reads as an empty list at 69b6249f: the stack serves it, but only the test-tool BACnetStackTestTool_SetLifeSafetyZoneMembers can fill it, and the series does not use the test-tool interface. [KNOWN GAP] in tests/life_safety_test.py; see TODO.md and stack #2036 (open)
+### Life Safety Zone 1 "Azure" - The smoke detector's zone. F-LIFESAFETY / F-ALARM-LS. Rolls up Life Safety Point 1 (Amber): takes its detector reading, latches alarm the same way, and a LifeSafetyOperation addressed to the zone also operates Amber. Event_State is genuinely computed (the same two algorithms are armed on Azure), marked accepted for the same generator-limitation reason. Reliability as Amber's. Zone_Members (cl. 12.16.26, required, BACnetLIST of BACnetDeviceObjectReference) should list Amber but reads as an empty list at 1e7dffe2b: the stack serves it, but only the test-tool BACnetStackTestTool_SetLifeSafetyZoneMembers can fill it, and the series does not use the test-tool interface. [KNOWN GAP] in tests/life_safety_test.py; see TODO.md and stack #2036 (open)
 
 | Property | Datatype | Served by | Writable |
 |---|---|---|:---:|

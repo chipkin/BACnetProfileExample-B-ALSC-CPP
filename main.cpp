@@ -170,7 +170,7 @@ using namespace CASBACnetStackExampleConstants;
 // 1. Example + device configuration
 // -----------------------------------------------------------------------------
 static const char* APP_NAME = "BACnet B-ALSC (Advanced Life Safety Controller) Example - C++";
-static const char* APP_VERSION = "1.3.0";
+static const char* APP_VERSION = "1.3.1";
 
 // The device instance. BACnet requires this to be configurable, so it defaults
 // to 389008 (docs/colour-table.md) and can be overridden on the command line
